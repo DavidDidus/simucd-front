@@ -282,3 +282,73 @@ body{
   .expand-two-col{ grid-template-columns: 1fr; }
   .modal-hero{ align-items: center; text-align: center; }
 }
+
+/* ===== DASHBOARD (mockup) ===== */
+.dashboard-grid{
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  grid-template-areas:
+    "chart kpis"
+    "timeline timeline";
+  gap: 16px;
+  height: fit-content;
+}
+
+/* Tarjetas blancas */
+.dash-card{
+  background: #fff;
+  border: 2px solid #d9ead7;
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 0 rgba(0,0,0,.03);
+  
+}
+
+/* Áreas del grid */
+.grid-chart{ grid-area: chart; }
+.grid-kpis{ grid-area: kpis; }
+.grid-timeline{ grid-area: timeline;  height: auto;}
+
+/* Título de tarjeta */
+.card-title{
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+/* KPIs */
+.kpi-card{ display:flex; flex-direction:column; }
+.kpi-grid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 10px 14px;
+}
+.kpi{
+  background: #f4faf4;
+  border: 1px solid #e4f1e4;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.kpi-label{ font-size: 12px; color:#2b5d15; }
+.kpi-value{ font-size: 20px; font-weight: 700; color:#264831; }
+
+/* Asegura buena altura del timeline */
+.grid-timeline svg{ 
+  width: 100%; 
+  display: block; 
+  min-height: 150px;
+  height: auto;
+}
+
+/* Responsive */
+@media (max-width: 1000px){
+  .dashboard-grid{
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "chart"
+      "kpis"
+      "timeline";
+  }
+}
+

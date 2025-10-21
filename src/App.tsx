@@ -7,8 +7,9 @@ import React, {
 } from "react";
 import axios from "axios";
 import { ParamCard } from "./components/ParamCard.tsx";
-import { simulate } from "./simulation";
 import type { Params } from "./types";
+import BarChart from "./components/BarChart";
+import Timeline from "./components/Timeline";
 
 import pickerImg from "./assets/Piqueador.png";
 import grueroImg from "./assets/Gruero.png";
@@ -37,6 +38,7 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<Params | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false); // mostrar dashboard
   let [result, setResult] = useState<any>(null);          // resultado de backend
 
 
@@ -48,8 +50,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify(params));
   }, [params]);
-
-  let localResult = useMemo(() => simulate(params), [params]);
 
   function set<K extends keyof Params>(key: K, value: number) {
     setParams((p) => ({ ...p, [key]: value }));
@@ -136,6 +136,7 @@ export default function App() {
       console.log("Resultado de simulación:", response.data);
       
       setResult(response.data);
+      setShowDashboard(true);
       
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -149,7 +150,7 @@ export default function App() {
     }
   }
 
-  const displayResult = result || localResult;
+  const displayResult = result;
 
 
   return (
@@ -276,15 +277,58 @@ export default function App() {
           Ejecutar simulación
         </button>
         {error && <p className="error">{error}</p>}
-        <div className="results">
-          <h3>Resultado</h3>
-          <ul>
-            <li><strong>Pendientes: </strong>{displayResult.pendientes?.toLocaleString() || 'N/A'} cajas</li>
-              <li><strong>Capacidad (cuello de botella): </strong>{displayResult.capacidadPorHora?.toLocaleString() || 'N/A'} cajas/h</li>
-              <li><strong>Cuello de botella: </strong>{displayResult.cuelloBotella || 'N/A'}</li>
-              <li><strong>Hora de término: </strong>{displayResult.turno_fin_real || displayResult.data?.turno_fin_real || 'N/A'}</li>
-          </ul>
-        </div>
+          {showDashboard && (
+            <div className="dashboard-grid">
+              <BarChart
+                title="Recursos configurados"
+                labels={["Pickers", "Grueros", "Consol.", "Chequeadores"]}
+                values={[
+                  params.pickers,
+                  params.grueros,
+                  params.consolidadores,
+                  params.chequeadores,
+                ]}
+                utilization={[
+                  displayResult?.data?.ocupacion_recursos?.pickers?.porcentaje_ocupacion || 0,
+                  displayResult?.data?.ocupacion_recursos?.grueros?.porcentaje_ocupacion || 0,
+                  displayResult?.data?.ocupacion_recursos?.parrilleros?.porcentaje_ocupacion || 0,
+                  displayResult?.data?.ocupacion_recursos?.chequeadores?.porcentaje_ocupacion || 0,
+                ]}
+                className="dash-card grid-chart"
+              />
+
+              {/* TARJETA DE KPIs */}
+              <div className="dash-card kpi-card grid-kpis">
+                <div className="card-title">KPIs clave</div>
+                <div className="kpi-grid">
+                  <div className="kpi">
+                    <div className="kpi-label">ICEO</div>
+                      <div className="kpi-value">
+                        {displayResult?.data?.ice_mixto?.valor?.toLocaleString?.() ?? "N/A"}
+                    </div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpi-label">Hora de término</div>
+                      <div className="kpi-value">
+                        {displayResult?.turno_fin_real ??
+                        displayResult?.data?.turno_fin_real ?? "N/A"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* LÍNEA DE TIEMPO */}
+              <Timeline
+                timePoints={(displayResult?.data?.timeline || []).map((mPoint: any) => ({
+                  time: mPoint.hora,
+                  label: mPoint.descripcion,
+                  isEnd: mPoint.isEnd,
+                }))}
+                label="Proyección real"
+                className="dash-card grid-timeline"
+              />
+            </div>
+          )}
       </section>
     </div>
   );
