@@ -292,12 +292,12 @@ body{
     "chart kpis"
     "timeline timeline";
   gap: 16px;
-  height: fit-content;
+
 }
 
 /* Tarjetas blancas */
 .dash-card{
-  background: #fff;
+  
   border: 2px solid #d9ead7;
   border-radius: 14px;
   padding: 14px 16px;
@@ -351,4 +351,48 @@ body{
       "timeline";
   }
 }
+
+/* El card que integra tabs + contenido */
+.card-with-tabs {
+  padding: 0;               /* quitamos padding del card para que la cabecera pegue arriba */
+  overflow: hidden;         /* redondeo limpio */
+}
+
+/* Cabecera de tabs dentro del card */
+.tabs-in-card .tabs {
+  display: flex;
+  gap: .5rem;
+  padding: .75rem 1rem;
+  
+}
+
+/* Botones de pestaña (si no los tenías) */
+.tab {
+  padding: .5rem 1rem;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+.tab.active {
+  border-bottom: 2px solid currentColor;
+  font-weight: 600;
+}
+
+/* El cuerpo del card con grid de módulos */
+.dashboard-grid.in-card {
+  background-color: #d9ead7;
+}
+
+/* Sub-cards internos (gráfico, KPIs, timeline) */
+.subcard {
+  background: var(--panel, #f4fbf2);
+  border: 1px solid var(--border, #e6efe4);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+/* Si ya tienes .dash-card con sombras/bordes, 
+   .subcard debería ser más liviano para que se note jerarquía */
+
 
