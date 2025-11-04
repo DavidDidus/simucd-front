@@ -71,6 +71,12 @@ export function Dashboard({
                 <div className="kpi-label">Hora de término</div>
                 <div className="kpi-value">{kpis.endTime}</div>
               </div>
+              <div className="kpi">
+                <div className="kpi-label">Ocupacion Pick.</div>
+                <div className="kpi-value">
+                  {getFormattedActiveTime("pickers", activeTab, norm)}
+                </div>
+              </div>
             </>
             )}
 
@@ -80,12 +86,7 @@ export function Dashboard({
                 {getFormattedActiveTime("chequeadores", activeTab, norm)}
               </div>
             </div>
-            <div className="kpi">
-              <div className="kpi-label">Ocupacion Pick.</div>
-              <div className="kpi-value">
-                {getFormattedActiveTime("pickers", activeTab, norm)}
-              </div>
-            </div>
+            
             <div className="kpi">
               <div className="kpi-label">Ocupacion Gru.</div>
               <div className="kpi-value">

@@ -1,5 +1,6 @@
 /* Base */
 @import './styles/base/fonts.css';
+@import './styles/base/reset.css';
 @import './styles/base/layout.css';
 
 /* Components */

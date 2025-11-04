@@ -3,17 +3,19 @@ import type { TabId } from "../components/Tabs";
 export function readOccupation(
   rec: any,
   key: "pickers" | "grueros" | "parrilleros" | "chequeadores",
-  turnoIndex?: number
+  tab: TabId,
 ): number {
-  const item = rec?.[key];
-  if (!item) return 0;
-  if (typeof turnoIndex === "number") {
-    const arr = item?.por_turno_dia;
-    const v = Array.isArray(arr) && arr[turnoIndex]?.porcentaje_ocupacion;
-    return typeof v === "number" ? v : 0;
+  // Turno noche
+  if (tab === "noche") {
+    const ocupacion = rec?.[key]?.porcentaje_ocupacion;
+    return typeof ocupacion === "number" ? ocupacion : 0;
   }
-  const v = item?.porcentaje_ocupacion;
-  return typeof v === "number" ? v : 0;
+  
+  // Turnos de día (A o B)
+  const turno = tab === "diaA" ? "turno_A" : "turno_B";
+  const ocupacion = rec?.[turno]?.[key]?.ocupacion;
+  
+  return typeof ocupacion === "number" ? ocupacion : 0;
 }
 
 export function buildUtilization(
@@ -23,20 +25,17 @@ export function buildUtilization(
 ): number[] {
   if (tab === "noche" && recNoche) {
     return [
-      readOccupation(recNoche, "pickers"),
-      readOccupation(recNoche, "grueros"),
-      readOccupation(recNoche, "parrilleros"),
-      readOccupation(recNoche, "chequeadores"),
+      readOccupation(recNoche, "pickers", tab),
+      readOccupation(recNoche, "grueros", tab),
+      readOccupation(recNoche, "parrilleros", tab),
+      readOccupation(recNoche, "chequeadores", tab),
     ];
   }
-
-  const idx = tab === "diaA" ? 0 : 1;
   if (recDia) {
     return [
-      readOccupation(recDia, "pickers", idx),
-      readOccupation(recDia, "grueros", idx),
-      readOccupation(recDia, "parrilleros", idx),
-      readOccupation(recDia, "chequeadores", idx),
+      readOccupation(recDia, "grueros", tab),
+      readOccupation(recDia, "parrilleros", tab),
+      readOccupation(recDia, "chequeadores", tab),
     ];
   }
 
@@ -58,9 +57,11 @@ export function getFormattedActiveTime(
   norm: any
 ): string {
   const minutes =
-    tab === "noche"
-      ? norm.noche?.ocupacion_recursos?.[recurso]?.tiempo_activo_total_min
-      : norm.dia?.ocupacion_recursos?.[recurso]?.tiempo_activo;
+  tab === "noche"
+    ? norm.noche?.ocupacion_recursos?.[recurso]?.tiempo_activo_total_min  // Si es noche
+    : tab === "diaA"
+    ? norm.dia?.metricas_turnos?.turno_A?.[recurso]?.tiempo_activo_min  // Si es diaA
+    : norm.dia?.metricas_turnos?.turno_B?.[recurso]?.tiempo_activo_min;  // Si es diaB
 
   if (minutes == null || Number.isNaN(Number(minutes))) return "N/A";
 
@@ -76,5 +77,10 @@ export function getFormattedActiveTime(
 
 export function getStaffValues(tab: TabId, night: any, dayA: any, dayB: any): number[] {
   const s = tab === "noche" ? night : tab === "diaA" ? dayA : dayB;
-  return [s.pickers, s.grueros, s.consolidadores, s.chequeadores];
+  if(tab === "noche"){
+    return [s.pickers, s.grueros, s.consolidadores, s.chequeadores];
+
+  }else{
+    return [s.grueros, s.consolidadores, s.chequeadores];
+  }
 }

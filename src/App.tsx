@@ -57,7 +57,7 @@ export default function App() {
     setParams((p) => ({ ...p, [key]: value }));
   }
 
-  const recDia = normalized.dia?.ocupacion_recursos ?? null;
+  const recDia = normalized.dia?.metricas_turnos ?? null;
   const recNoche = normalized.noche?.ocupacion_recursos ?? null;
 
   const chartData = {
@@ -67,8 +67,12 @@ export default function App() {
         : activeTab === "diaA"
         ? "Ocupación (Día - Turno A)"
         : "Ocupación (Día - Turno B)",
-    labels: ["Pickers", "Grueros", "Consol.", "Chequeadores"],
+    labels:
+      activeTab === "noche"
+        ? ["Pickers", "Grueros", "Consol.", "Chequeadores"]
+        : ["Grueros", "Consol.", "Chequeadores"],
     values: getStaffValues(activeTab, night, dayA, dayB),
+    
     utilization: buildUtilization(activeTab, recDia, recNoche),
   };
 
@@ -96,16 +100,16 @@ function validateResources(): string | null {
     // Validar cajas
 
     if (params.cajasFacturadas < params.cajasPiqueadas) {
-      return "Las cajas piqueadas no pueden ser mayores que las facturadas";
+      return "Las cajas pickeadas no pueden ser mayores que las facturadas";
     }
     if (params.cajasFacturadas === 0) {
       return "Las cajas facturadas no pueden ser 0";
     }
     if (params.cajasPiqueadas === 0) {
-      return "Las cajas piqueadas no pueden ser 0";
+      return "Las cajas pickeadas no pueden ser 0";
     }
     if (params.cajasPiqueadas > params.cajasFacturadas) {
-      return "Las cajas piqueadas no pueden ser mayores que las facturadas";
+      return "Las cajas pickeadas no pueden ser mayores que las facturadas";
     }
 
     // Validar recursos noche

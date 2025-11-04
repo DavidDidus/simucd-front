@@ -30,18 +30,6 @@ export function ParamCard({ label, value, onChange, imgSrc }: ParamCardProps) {
     }
   };
 
-  const increment = () => {
-    const newVal = value + 1;
-    setInputValue(newVal.toString());
-    onChange(newVal);
-  };
-
-  const decrement = () => {
-    const newVal = Math.max(0, value - 1);
-    setInputValue(newVal.toString());
-    onChange(newVal);
-  };
-
   return (
     <div className="card">
       <img src={imgSrc} alt={label} className="card-img" />
