@@ -1,0 +1,24 @@
+:root {
+  --green-900: #264831;
+  --green-800: #2E6514;
+  --green-700: #56963a;
+  --card: #e8f1eb;
+  --text: #292a2a;
+  --muted: #22581f;
+  --ring: rgba(49, 113, 26, .28);
+}
+
+* { 
+  box-sizing: border-box; 
+}
+
+html, body, #root { 
+  height: 100%; 
+}
+
+body {
+  margin: 0;
+  font-family: "Century Gothic", -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--text);
+  background: var(--green-900);
+}

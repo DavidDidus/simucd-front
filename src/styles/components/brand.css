@@ -1,0 +1,7 @@
+.brand {
+  letter-spacing: .6rem;
+  font-size: clamp(26px, 3.4vw, 46px);
+  color: #e8f1eb;
+  font-weight: 600;
+  margin-bottom: 22px;
+}

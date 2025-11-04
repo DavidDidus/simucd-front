@@ -1,0 +1,73 @@
+.dashboard-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  grid-template-areas:
+    "chart kpis"
+    "timeline timeline";
+  gap: 16px;
+}
+
+.grid-chart { 
+  grid-area: chart; 
+}
+
+.grid-kpis { 
+  grid-area: kpis; 
+}
+
+.grid-timeline { 
+  grid-area: timeline;  
+  height: auto;
+}
+
+.grid-timeline svg { 
+  width: 100%; 
+  display: block; 
+  min-height: 150px;
+  height: auto;
+}
+
+.dashboard-grid.in-card {
+  background-color: #d9ead7;
+}
+
+/* KPIs */
+.kpi-card { 
+  display: flex; 
+  flex-direction: column; 
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 10px 14px;
+}
+
+.kpi {
+  background: #f4faf4;
+  border: 1px solid #e4f1e4;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.kpi-label { 
+  font-size: 12px; 
+  color: #2b5d15; 
+}
+
+.kpi-value { 
+  font-size: 20px; 
+  font-weight: 700; 
+  color: #264831; 
+}
+
+@media (max-width: 1000px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "chart"
+      "kpis"
+      "timeline";
+  }
+}

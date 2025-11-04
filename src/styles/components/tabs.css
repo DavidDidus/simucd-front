@@ -1,0 +1,47 @@
+.tabs-in-card .tabs {
+  display: flex;
+  gap: .5rem;
+  padding: .75rem 1rem;
+}
+
+.tab {
+  padding: .5rem 1rem;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.tab.active {
+  border-bottom: 2px solid currentColor;
+  font-weight: 600;
+}
+
+/* Segmented control */
+.shiftseg { 
+  display: flex; 
+  gap: .5rem; 
+  background: #122f23; 
+  padding: .5rem; 
+  border-radius: 999px; 
+}
+
+.shiftseg-btn { 
+  border: 0; 
+  padding: .45rem .9rem; 
+  border-radius: 999px; 
+  background: transparent; 
+  color: #cfe7d6; 
+  cursor: pointer; 
+}
+
+.shiftseg-btn.active { 
+  background: #e7f3ea; 
+  color: #103825; 
+  font-weight: 600; 
+}
+
+.shiftseg-btn:focus { 
+  outline: 2px solid #9ad3ac; 
+  outline-offset: 2px; 
+}

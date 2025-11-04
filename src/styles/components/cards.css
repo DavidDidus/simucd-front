@@ -1,0 +1,73 @@
+.card, .big-card {
+  background: #e8f1eb;
+  border-radius: 14px;
+  border: 2px solid #d9ead7;
+  transition:
+    transform .45s cubic-bezier(.2,.8,.2,1),
+    box-shadow .45s cubic-bezier(.2,.8,.2,1),
+    border-color .45s ease;
+  box-shadow: 0 1px 0 rgba(0,0,0,.03);
+}
+
+.card:hover, .big-card:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 12px 24px rgba(0,0,0,.06);
+}
+
+.card:active, .big-card:active { 
+  transform: translateY(0) scale(.997); 
+}
+
+.card {
+  padding: 20px 16px 22px;
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  gap: 10px; 
+  text-align: center;
+}
+
+.card-img { 
+  height: 88px; 
+  width: auto; 
+  object-fit: contain; 
+  display: block; 
+}
+
+.card-row { 
+  display: flex; 
+  align-items: center; 
+  gap: 8px;  
+}
+
+.card-label { 
+  color: var(--text); 
+}
+
+/* Tarjetas dashboard */
+.dash-card {
+  border: 2px solid #d9ead7;
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 0 rgba(0,0,0,.03);
+}
+
+.card-title {
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+/* Card con tabs */
+.card-with-tabs {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Sub-cards internos */
+.subcard {
+  background: var(--panel, #f4fbf2);
+  border: 1px solid var(--border, #e6efe4);
+  border-radius: 12px;
+  padding: 1rem;
+}

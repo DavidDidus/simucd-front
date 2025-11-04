@@ -1,0 +1,33 @@
+.num-input {
+  border: 2px solid #cfe5cc;
+  background: white;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--text);
+  outline: none;
+  transition: border-color .3s ease, box-shadow .3s ease;
+}
+
+.num-input:focus { 
+  border-color: var(--green-700); 
+  box-shadow: 0 0 0 4px var(--ring); 
+}
+
+.num-input.wide { 
+  width: 100%; 
+}
+
+.num-input.compact {
+  width: 72px;
+  border: none;
+  background: white;
+  padding: 2px 4px;
+  border-bottom: 2px solid #fff;
+  text-align: center;
+}
+
+.num-input.compact:focus {
+  border-color: var(--green-700);
+  box-shadow: none;
+}

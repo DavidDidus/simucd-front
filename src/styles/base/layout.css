@@ -1,0 +1,55 @@
+.page {
+  padding: 28px clamp(16px, 4vw, 48px);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr;
+  grid-auto-rows: 1fr;
+  gap: 18px;
+  position: relative;
+}
+
+.grid.editing .hide-on-expand {
+  opacity: 0;
+  transform: scale(.98);
+  filter: blur(1px);
+  pointer-events: none;
+  transition: none;
+}
+
+.hide-on-expand {
+  opacity: 0;
+  pointer-events: none;
+  filter: blur(1px);
+  transition: opacity .6s ease, filter .6s ease, transform .6s ease;
+}
+
+/* Panel de resultado */
+.panel {
+  margin-top: 18px;
+  background: #d9ead7;
+  border: 2px solid #d9ead7;
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+
+.error { 
+  color: #9b1c1c; 
+  margin-top: 10px; 
+}
+
+.results { 
+  margin-top: 12px; 
+}
+
+.results h3 { 
+  margin: 6px 0 8px; 
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .grid { 
+    grid-template-columns: 1fr; 
+  }
+}
