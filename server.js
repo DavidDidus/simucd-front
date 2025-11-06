@@ -11,12 +11,11 @@ const app = express();
 app.use(
   "/api",
   createProxyMiddleware({
-    target: "http://simucd-back:8080", // nombre del servicio backend en Railway
+    target: "http://simucd-back:8000",
     changeOrigin: true,
-    secure: false, // permite HTTP interno
+    pathRewrite: { "^/api": "/api" } // mantiene /api en la ruta
   })
 );
-
 app.use(express.static(path.join(__dirname, "dist")));
 
 app.get(/.*/, (_, res) => {
