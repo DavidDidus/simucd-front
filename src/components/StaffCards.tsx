@@ -2,11 +2,11 @@ import { ParamCard } from "./ParamCard";
 import QuadCarousel from "./CardCarousel";
 import type { ShiftId } from "./ShiftInputTabs";
 
-import pickerImg from "../assets/Piqueador.png";
-import grueroImg from "../assets/Gruero.png";
-import consolidadorImg from "../assets/Consolidador de carga.png";
-import chequeadorImg from "../assets/Chequeador.png";
-import camionImg from "../assets/Camion.png";
+import pickerImg from "../assets/resources/Picker.png";
+import grueroImg from "../assets/resources/Gruero.png";
+import consolidadorImg from "../assets/resources/Consolidador_de_carga .png";
+import chequeadorImg from "../assets/resources/Chequeador.png";
+import camionImg from "../assets/resources/Camion.png";
 
 interface StaffCardsProps {
   shiftInput: ShiftId;

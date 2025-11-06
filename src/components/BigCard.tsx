@@ -1,5 +1,5 @@
 import { useState } from "react";
-import latasCCUImg from "../assets/Latas ccu.png";
+import latasCCUImg from "../assets/resources/Latas_CCU.png";
 import type { Params } from "../types";
 
 interface BigCardProps {
