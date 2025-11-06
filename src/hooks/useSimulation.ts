@@ -7,6 +7,9 @@ export function useSimulation() {
   const [loading, setLoading] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
 
+  const API_BASE_URL = import.meta.env.PROD 
+  ? "/api" // En producción usa URLs relativas (proxy)
+  : "http://localhost:8000"; // En desarrollo directo al backend
 
   function normalizeApiResult(raw: any): { noche: any | null; dia: any | null } {
     if (!raw) return { noche: null, dia: null };
@@ -43,7 +46,7 @@ export function useSimulation() {
     setLoading(true);
 
     try {
-      const response = await axios.post("/api/simulate", {
+      const response = await axios.post(`${API_BASE_URL}/simulate`, {
         "Cajas facturadas": params.cajasFacturadas,
         "Cajas piqueadas": params.cajasPiqueadas,
         "Pickers": night.pickers,

@@ -182,6 +182,7 @@ function handleRunSimulation() {
           disabled={loading}
         >
           {loading ? "Ejecutando..." : "Ejecutar simulación"}
+        
         </button>
 
         {validationError && <p className="error">{validationError}</p>}
