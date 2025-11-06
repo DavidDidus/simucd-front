@@ -11,7 +11,7 @@ const app = express();
 app.use(
   "/api",
   createProxyMiddleware({
-    target: "http://simucd-back:8000", // nombre del servicio backend en Railway
+    target: "http://simucd-back:8080", // nombre del servicio backend en Railway
     changeOrigin: true,
     secure: false, // permite HTTP interno
   })
