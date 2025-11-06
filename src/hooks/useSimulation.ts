@@ -7,7 +7,7 @@ export function useSimulation() {
   const [loading, setLoading] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
 
-  const api = import.meta.env.VITE_API_URL;
+  const api = import.meta.env.VITE_API_URL || "/api";;
 
   function normalizeApiResult(raw: any): { noche: any | null; dia: any | null } {
     if (!raw) return { noche: null, dia: null };

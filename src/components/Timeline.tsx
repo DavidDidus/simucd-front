@@ -235,7 +235,7 @@ const Timeline: React.FC<TimelineProps> = ({
           })}
 
           {/* Puntos y etiquetas */}
-          {renderPoints.map(({ p, depth, dir, labelY, timeY, anchor, x, connectorEndY }, i) => (
+          {renderPoints.map(({ p, depth, labelY, timeY, anchor, x, connectorEndY }) => (
             <g key={p.idx}>
               <line
                 x1={p.x} y1={baselineY} x2={p.x} y2={connectorEndY}
