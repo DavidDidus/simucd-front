@@ -13,7 +13,7 @@ app.use(
   createProxyMiddleware({
     target: "http://simucd-back:8000",
     changeOrigin: true,
-    pathRewrite: { "^/api": "/api" } // mantiene /api en la ruta
+    pathRewrite: { "^/api": "" } // mantiene /api en la ruta
   })
 );
 app.use(express.static(path.join(__dirname, "dist")));
