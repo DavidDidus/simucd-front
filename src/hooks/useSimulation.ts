@@ -7,6 +7,8 @@ export function useSimulation() {
   const [loading, setLoading] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
 
+  const api = import.meta.env.VITE_API_URL;
+
   function normalizeApiResult(raw: any): { noche: any | null; dia: any | null } {
     if (!raw) return { noche: null, dia: null };
     const data = raw?.data ?? raw;
@@ -42,7 +44,7 @@ export function useSimulation() {
     setLoading(true);
 
     try {
-      const response = await axios.post("http://localhost:8000/api/simulate", {
+      const response = await axios.post(`${api}/api/simulate`, {
         "Cajas facturadas": params.cajasFacturadas,
         "Cajas piqueadas": params.cajasPiqueadas,
         "Pickers": night.pickers,
