@@ -11,7 +11,7 @@ const app = express();
 app.use(
   "/api",
   createProxyMiddleware({
-    target: "http://simucd-back:8080",
+    target: "http://simucd-back:8000",
     changeOrigin: true,
     pathRewrite: { "^/api": "/api" } // mantiene /api en la ruta
   })
