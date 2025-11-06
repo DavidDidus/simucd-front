@@ -13,9 +13,7 @@ app.use(
   createProxyMiddleware({
     target: "http://simucd-back:8080",
     changeOrigin: true,
-   onProxyReq: (proxyReq, req, res) => {
-      console.log(`🔄 Proxy: ${req.method} ${req.url} → ${proxyReq.path}`);
-    },
+   
   })
 );
 app.use(express.static(path.join(__dirname, "dist")));
