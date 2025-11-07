@@ -32,7 +32,6 @@ export default function App() {
   const [shiftInput, setShiftInput] = useState<ShiftId>("noche");
   const [activeTab, setActiveTab] = useState<TabId>("diaA");
   const [validationError, setValidationError] = useState<string | null>(null);
-
   const { night, dayA, dayB, getCurrentParams, updateShiftParam } = useShiftParams(params);
   const { editing, bigCardRef, openEditor, collapseEditor } = useCardAnimation();
   const { normalized, error, loading, showDashboard, runSimulation } = useSimulation();

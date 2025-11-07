@@ -19,12 +19,13 @@
 }
 
 .card {
-  padding: 20px 16px 22px;
+  padding: 15px 10px;
   display: flex; 
   flex-direction: column; 
   align-items: center; 
-  gap: 10px; 
   text-align: center;
+  min-width: 140px; /* 👈 Ancho mínimo */
+  max-width: 280px; /* 👈 Ancho máximo */
 }
 
 .card-img { 
@@ -36,12 +37,14 @@
 
 .card-row { 
   display: flex; 
+  flex-direction: column;
   align-items: center; 
   gap: 8px;  
 }
 
 .card-label { 
-  color: var(--text); 
+  color: var(--text);
+  font-size: clamp(13px, 2vw, 15px); /* 👈 Responsive */
 }
 
 /* Tarjetas dashboard */
@@ -71,3 +74,56 @@
   border-radius: 12px;
   padding: 1rem;
 }
+
+@media (max-width: 768px) {
+  .card {
+    padding: 14px 12px 16px;
+    gap: 8px;
+  }
+
+  .card-img {
+    height: 70px;
+  }
+
+  .card-label {
+    font-size: 14px;
+  }
+}
+
+/* Móviles pequeños (< 480px) */
+@media (max-width: 480px) {
+  .card {
+    padding: 12px 10px 14px;
+    gap: 6px;
+    min-width: 120px;
+  }
+
+  .card-img {
+    height: 55px;
+  }
+
+  .card-row {
+    gap: 4px;
+  }
+
+  .card-label {
+    font-size: 13px;
+  }
+}
+
+/* Pantallas muy pequeñas (< 360px) */
+@media (max-width: 360px) {
+  .card {
+    padding: 10px 8px 12px;
+    min-width: 100px;
+  }
+
+  .card-img {
+    height: 48px;
+  }
+
+  .card-label {
+    font-size: 12px;
+  }
+}
+
