@@ -120,28 +120,100 @@
   }
 }
 
+@media (max-width: 900px) and (min-width: 601px) {
+  .day-cards-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    padding: 0 16px;
+  }
+  
+  .day-cards-container .card {
+    max-width: 100%;
+  }
+  
+  /* 👇 Carrusel se mantiene 2x2 */
+  .qc-page {
+    gap: 20px;
+    padding: 0 30px;
+  }
+}
+
 /* Móviles grandes (600px - 480px) */
 @media (max-width: 600px) and (min-width: 481px) {
   .day-cards-container {
-    grid-template-columns: repeat(2, 1fr); /* 2 columnas compactas */
+    grid-template-columns: repeat(2, 1fr);
     gap: 12px;
     max-width: 100%;
+    padding: 0 12px;
+  }
+  
+  .day-cards-container .card {
+    max-width: 100%;
+  }
+  
+  /* 👇 Carrusel se mantiene 2x2 */
+  .qc-page {
+    gap: 16px;
+    padding: 0 24px;
   }
 }
 
 /* Móviles (< 480px) */
 @media (max-width: 480px) {
   .day-cards-container {
-    grid-template-columns: 1fr; /* 1 columna */
+    grid-template-columns: repeat(2, 1fr); /* 👈 2x2 en móviles */
+    grid-template-rows: repeat(2, 1fr);
     gap: 10px;
     max-width: 100%;
     padding: 0 8px;
   }
-  .quad-carousel {
-    grid-row: auto; /* 👈 No span en móviles */
-  }
 
   .day-cards-container .card {
     max-width: 100%;
+    min-width: 0;
+    padding: 12px 8px;
+  }
+  
+  /* 👇 Carrusel se mantiene 2x2 */
+  .quad-carousel {
+    grid-row: auto;
+  }
+  
+  .qc-page {
+    grid-template-columns: 1fr 1fr; /* 👈 Mantener 2 columnas */
+    grid-template-rows: 1fr 1fr; /* 👈 Mantener 2 filas */
+    gap: 12px;
+    padding: 0 16px;
+  }
+  
+  .qc-btn {
+    inline-size: 28px;
+    block-size: 28px;
+    font-size: 20px;
+  }
+}
+
+/* Pantallas muy pequeñas (< 360px) */
+@media (max-width: 360px) {
+  .day-cards-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 0 6px;
+  }
+  
+  .day-cards-container .card {
+    padding: 10px 6px;
+  }
+  
+  /* 👇 Carrusel se mantiene 2x2 */
+  .qc-page {
+    gap: 10px;
+    padding: 0 12px;
+  }
+  
+  .qc-btn {
+    inline-size: 24px;
+    block-size: 24px;
+    font-size: 18px;
   }
 }
