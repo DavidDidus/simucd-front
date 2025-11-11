@@ -10,6 +10,7 @@ import { useSimulation } from "./hooks/useSimulation";
 import { useCardAnimation } from "./hooks/useCardAnimation";
 import { useShiftParams } from "./hooks/useShiftParams";
 import { buildUtilization, buildTimeline, getStaffValues } from "./utils/dataUtils";
+import Simulation2D from "./components/simulation/Simulation2D";
 
 const LS_KEY = "simucd-params";
 
@@ -35,7 +36,8 @@ export default function App() {
 
   const { night, dayA, dayB, getCurrentParams, updateShiftParam } = useShiftParams(params);
   const { editing, bigCardRef, openEditor, collapseEditor } = useCardAnimation();
-  const { normalized, error, loading, showDashboard, runSimulation } = useSimulation();
+  const { normalized, error, loading, showDashboard } = useSimulation();
+  const [showSim2D, setShowSim2D] = useState(false);
 
   const currentParams = getCurrentParams(shiftInput);
 
@@ -133,8 +135,9 @@ function validateResources(): string | null {
 
     return null;
   }
-
+  let pressed = false;
 function handleRunSimulation() {
+    
     const validationMessage = validateResources();
     
     if (validationMessage) {
@@ -143,8 +146,19 @@ function handleRunSimulation() {
       return;
     }
 
+    if(!pressed){
+      setShowSim2D(true);
+      pressed = true;
+    }else{
+      console.log("Already pressed");
+      setShowSim2D(false);
+      pressed = false;
+    }
+
     setValidationError(null);
-    runSimulation(params, night, dayA, dayB);
+    //runSimulation(params, night, dayA, dayB);
+    
+    
   }
 
 
@@ -184,8 +198,16 @@ function handleRunSimulation() {
           {loading ? "Ejecutando..." : "Ejecutar simulación"}
         </button>
 
+        
+
         {validationError && <p className="error">{validationError}</p>}
         {error && <p className="error">{error}</p>}
+
+        {showSim2D && (
+        <div style={{ marginTop: 12 }}>
+          <Simulation2D running resources={{ noche: 4, turnoA: 2, turnoB: 0 }} />
+        </div>
+      )}
 
         {showDashboard && (
           <Dashboard

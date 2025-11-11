@@ -15,3 +15,10 @@
 
 /* Animations */
 @import './styles/animations/transitions.css';
+
+.sim-wrap {
+  border: 1px dashed var(--border, #e5e7eb);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}

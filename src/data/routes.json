@@ -1,0 +1,30 @@
+{
+  "routes": [
+    {
+      "id": "route-main-horizontal",
+      "name": "Ruta principal horizontal",
+      "description": "Recorrido horizontal para carga/descarga estándar",
+      "points": [
+        { "x": 0.06, "y": 0.76 },
+        { "x": 0.94, "y": 0.76 }
+      ],
+      "eventTypes": ["delivery", "pickup"],
+      "shifts": ["noche", "turnoA"],
+      "priority": 1
+    },
+    {
+      "id": "route-warehouse-north",
+      "name": "Ruta bodega norte",
+      "description": "Desde entrada hacia zona de almacenamiento norte",
+      "points": [
+        { "x": 0.1, "y": 0.8 },
+        { "x": 0.3, "y": 0.7 },
+        { "x": 0.5, "y": 0.3 },
+        { "x": 0.7, "y": 0.2 }
+      ],
+      "eventTypes": ["restock"],
+      "shifts": ["turnoB"],
+      "priority": 2
+    }
+  ]
+}
