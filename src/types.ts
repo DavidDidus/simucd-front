@@ -18,3 +18,7 @@ export type SimResult = {
 export type Shift = 'noche' | 'turnoA' | 'turnoB';
 export type ShiftResources = { noche: number; turnoA: number; turnoB: number };
 export type Point = { x: number; y: number }; // coordenadas normalizadas 0..1
+
+
+
+

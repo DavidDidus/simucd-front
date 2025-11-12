@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { ShiftResources, Shift } from '../../types';
-import { PREDEFINED_ROUTES, type PredefinedRoute } from '../../utils/routes';
+import { PREDEFINED_ROUTES, type PredefinedRoute } from '../../utils/routes/routes';
 
 export interface SimSidebarProps {
   simTimeSec: number;

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Point } from "../../types";
-import { generateRouteJSON, formatForRoutesFile } from "../../utils/routes";
+import { generateRouteJSON, formatForRoutesFile } from "../../utils/routes/routes";
 
 interface SaveRouteModalProps {
   points: Point[];

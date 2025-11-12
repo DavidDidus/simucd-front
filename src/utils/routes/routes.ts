@@ -1,5 +1,5 @@
-import type { Point } from "../types";
-import routesData from "../data/routes.json";
+import type { Point } from "../../types";
+import routesData from "../../data/routes.json";
 
 export interface PredefinedRoute {
   id: string;
