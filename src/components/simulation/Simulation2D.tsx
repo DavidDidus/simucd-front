@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Stage } from 'react-konva';
 import SimSidebar from './SimSidebar';
-import SaveRouteModal from './SaveRouteModal';
+import SaveRouteModal from './modals/SaveRouteModal';
 import BG_IMPORT from '../../assets/Simulacion/PATIO.png';
 import type { Point, ShiftResources } from '../../types';
 import type { ActorType } from '../../types/actors';
@@ -15,11 +15,19 @@ import { useHTMLImage } from '../../hooks/useHTMLImage';
 import { useStageSize } from '../../hooks/useStageSize';
 import { useRoute } from '../../hooks/useRoute';
 import { useActorImages } from '../../hooks/useActorImages';
+import { useObstacle} from '../../hooks/useObstacle';
+import { PREDEFINED_OBSTACLES } from '../../utils/routes/obstacles';
+import { aStarPathfinding } from '../../utils/routes/pathfinding';
+import SaveObstacleModal from './modals/SaveObstacleModal';
+import ObstaclesLayer from './layers/ObstaclesLayer';
 import BackgroundLayer from './layers/BackgroundLayer';
 import HUDLayer from './layers/HudLayer';
 import RouteLayer from './layers/RouteLayer';
 import ActorsLayer from './layers/ActorsLayer';
 import DevToolbar from './DevToolbar';
+
+
+type EditMode = 'route' | 'obstacle';
 
 type Props = {
   running?: boolean;
@@ -46,8 +54,11 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
   const [editing, setEditing] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
 
+  const [editMode, setEditMode] = useState<EditMode>('route');
+  const [showSaveObstacleModal, setShowSaveObstacleModal] = useState(false);
+  const { obstacle, setObstacle, clearObstacle } = useObstacle([]);
+
   const [routeTransition, setRouteTransition] = useState<RouteTransition | null>(null);
-  const [currentRouteRef, setCurrentRouteRef] = useState<any>(null);
 
   useEffect(() => { if (!CAN_EDIT) setEditing(false); }, []);
   const { route, setRoute, saveRoute, loadRoute, clearRoute } = useRoute(DEFAULT_ROUTE);
@@ -60,32 +71,57 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
   const [cursor, setCursor] = useState(0);
   const dirRef = useRef<1 | -1>(1);
   const [speedMult, setSpeedMult] = useState<number>(1);
+  
+  //Borrar estos dos despues de configurar los obstaculos
+  const [stageScale, setStageScale] = useState(1);
+  const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
 
   const SIM_DAY_SECONDS = 24*60*60; 
   const LOOP_DAY = false;
 
-  // 🆕 Cambio automático de ruta basado en horario usando rutas del JSON
-  useEffect(() => {
-    if (editing) return; // No cambiar rutas mientras se edita
-
-    const { route: activeRoute, schedule } = getActiveScheduledRoute(simTimeSec);
-    
-    if (activeRoute.id !== currentScheduledRouteId) {
-      console.log(`🔄 Cambiando a ruta: "${activeRoute.name}" (${activeRoute.id}) a las ${formatHM(simTimeSec)}`);
-      console.log(`📋 Descripción: ${activeRoute.description}`);
-      
-      setCurrentScheduledRouteId(activeRoute.id);
-      setRoute(activeRoute.points);
-      // Resetear cursor para evitar saltos bruscos
-      setCursor(0);
-    }
-  }, [simTimeSec, editing, currentScheduledRouteId, setRoute]);
-
-  // Path en píxeles
-  const pathPx = useMemo(
+   const pathPx = useMemo(
     () => buildPathPx(route, stageDims.w, stageDims.h),
     [route, stageDims.w, stageDims.h]
   );
+
+  // 🆕 Cambio automático de ruta basado en horario usando rutas del JSON
+  useEffect(() => {
+    if (editing) return;
+
+    const { route: activeRoute, schedule } = getActiveScheduledRoute(simTimeSec);
+    
+    if (activeRoute.id !== currentScheduledRouteId && !routeTransition) {
+      console.log(`🔄 Iniciando transición a ruta: "${activeRoute.name}" considerando obstáculos`);
+      
+      // Obtener posición actual del actor
+      let currentPosition: Point;
+      if (pathPx.total > 0 && cursor >= 0) {
+        const pose = poseAlongPath(pathPx, cursor);
+        currentPosition = {
+          x: pose.x / stageDims.w,
+          y: pose.y / stageDims.h
+        };
+      } else {
+        currentPosition = route[0] || { x: 0.5, y: 0.5 };
+      }
+
+      // Crear transición con obstáculos
+      const currentRoute = PREDEFINED_ROUTES.find(r => r.id === currentScheduledRouteId);
+      if (currentRoute) {
+        const transition = createRouteTransition(
+          currentPosition, 
+          currentRoute, 
+          activeRoute,
+          PREDEFINED_OBSTACLES // 🆕 Pasar obstáculos
+        );
+        setRouteTransition(transition);
+      } else {
+        setCurrentScheduledRouteId(activeRoute.id);
+        setRoute(applyAvoidObstaclesToRoute(activeRoute.points));
+        setCursor(0);
+      }
+    }
+  }, [simTimeSec, editing, currentScheduledRouteId, routeTransition, pathPx, cursor, stageDims]);
 
   // Recursos por turno
   const [resources, setResources] = useState<ShiftResources>({ noche: 0, turnoA: 0, turnoB: 0 });
@@ -100,7 +136,7 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
 
   // Configuración de actores - solo grúas
   const [actorCounts] = useState<Record<ActorType, number>>({
-    truck1: 0,
+    truck1: 4,
     truck2: 0,
     truck3: 0,
     truck4: 0,
@@ -123,49 +159,51 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
     const selectedRoute = PREDEFINED_ROUTES.find((r) => r.id === routeId);
     if (selectedRoute) {
       setSelectedRouteId(routeId);
-      setRoute(selectedRoute.points);
+      const safePoints = applyAvoidObstaclesToRoute(selectedRoute.points);
+      setRoute(safePoints);
     }
   };
 
   const currentShift = useMemo(() => shiftForSecond(simTimeSec), [simTimeSec]);
   const activeCount = useMemo(() => Math.min(20, Math.max(0, resources[currentShift])), [resources, currentShift]);
 
-  // Ticker (mientras corre la simulación y no editas)
-useEffect(() => {
-    if (editing) return;
+  //Borrame despues de configurar los obstaculos
+  const handleWheel = (e: any) => {
+  // Solo permitir zoom cuando estás editando obstáculos (opcional)
+  if (!editing || editMode !== 'obstacle') return;
 
-    const { route: activeRoute, schedule } = getActiveScheduledRoute(simTimeSec);
-    
-    if (activeRoute.id !== currentScheduledRouteId && !routeTransition) {
-      console.log(`🔄 Iniciando transición a ruta: "${activeRoute.name}" (${activeRoute.id}) a las ${formatHM(simTimeSec)}`);
-      
-      // Obtener posición actual del actor
-      let currentPosition: Point;
-      if (pathPx.total > 0 && cursor >= 0) {
-        const pose = poseAlongPath(pathPx, cursor);
-        currentPosition = {
-          x: pose.x / stageDims.w,
-          y: pose.y / stageDims.h
-        };
-      } else {
-        currentPosition = route[0] || { x: 0.5, y: 0.5 };
-      }
+  e.evt.preventDefault();
 
-      // Crear transición
-      const currentRoute = PREDEFINED_ROUTES.find(r => r.id === currentScheduledRouteId);
-      if (currentRoute) {
-        const transition = createRouteTransition(currentPosition, currentRoute, activeRoute);
-        setRouteTransition(transition);
-      } else {
-        // Si no hay ruta actual, cambiar directamente
-        setCurrentScheduledRouteId(activeRoute.id);
-        setRoute(activeRoute.points);
-        setCursor(0);
-      }
-    }
-  }, [simTimeSec, editing, currentScheduledRouteId, routeTransition, pathPx, cursor, stageDims]);
+  const scaleBy = 1.05;
+  const stage = e.target.getStage();
+  const oldScale = stageScale;
+  const pointer = stage.getPointerPosition();
+  if (!pointer) return;
 
-  // 🆕 Manejar progreso de transición
+  // Coordenadas del mouse en el “mundo” antes de cambiar escala
+  const mousePointTo = {
+    x: (pointer.x - stagePosition.x) / oldScale,
+    y: (pointer.y - stagePosition.y) / oldScale,
+  };
+
+  // Rueda arriba = zoom in, abajo = zoom out
+  const direction = e.evt.deltaY > 0 ? -1 : 1;
+  const newScale =
+    direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
+
+  // Limitar un poco el zoom
+  const finalScale = Math.max(0.5, Math.min(4, newScale));
+
+  // Ajustar posición para que el punto bajo el cursor se mantenga
+  const newPos = {
+    x: pointer.x - mousePointTo.x * finalScale,
+    y: pointer.y - mousePointTo.y * finalScale,
+  };
+
+  setStageScale(finalScale);
+  setStagePosition(newPos);
+};
+
  // 🆕 Manejar progreso de transición actualizado
   useEffect(() => {
     if (!routeTransition || !running || editing) return;
@@ -181,7 +219,7 @@ useEffect(() => {
           // 🆕 Transición completada - actor ahora está en el INICIO de la nueva ruta
           console.log(`✅ Transición completada. Actor llegó al inicio de: ${prev.toRoute.name}`);
           setCurrentScheduledRouteId(prev.toRoute.id);
-          setRoute(prev.toRoute.points);
+          setRoute(applyAvoidObstaclesToRoute(prev.toRoute.points));
           
           // 🆕 CRUCIAL: Establecer cursor en 0 para que comience desde el inicio
           // Sin resetear cursor, porque ya está en el inicio correcto
@@ -271,11 +309,35 @@ useEffect(() => {
 
   // Click para añadir puntos (solo en dev + edición)
   const onStageClick = (e: any) => {
-    if (!CAN_EDIT || !editing) return;
-    if (e.evt?.button !== 0) return;
-    const pos = e.target.getStage()?.getPointerPosition();
-    if (!pos) return;
-    setRoute((r: Point[]) => [...r, toNorm(pos.x, pos.y, stageDims.w, stageDims.h)]);
+  if (!CAN_EDIT || !editing) return;
+  if (e.evt?.button !== 0) return; // solo click izquierdo
+
+  const stage = e.target.getStage();
+  const pointer = stage.getPointerPosition();
+  if (!pointer) return;
+
+  // Pasar de coordenadas de pantalla -> coordenadas del mundo (sin zoom ni pan)
+  const localPos = {
+    x: (pointer.x - stagePosition.x) / stageScale,
+    y: (pointer.y - stagePosition.y) / stageScale,
+  };
+
+  const point = toNorm(localPos.x, localPos.y, stageDims.w, stageDims.h);
+
+  if (editMode === 'route') {
+    setRoute((r: Point[]) => [...r, point]);
+  } else {
+    setObstacle((o: Point[]) => [...o, point]);
+  }
+};
+
+  // Handler para guardar obstáculo
+  const handleSaveObstacle = () => {
+    if (obstacle.length < 3) {
+      alert("El obstáculo debe tener al menos 3 puntos");
+      return;
+    }
+    setShowSaveObstacleModal(true);
   };
 
   // Handler para guardar ruta
@@ -291,6 +353,25 @@ useEffect(() => {
   const currentRouteInfo = PREDEFINED_ROUTES.find(r => r.id === currentScheduledRouteId);
   const scheduleDetails = getScheduleWithRouteDetails();
 
+  function applyAvoidObstaclesToRoute(route: Point[]): Point[] {
+  if (route.length < 2) return route;
+
+  const safeRoute: Point[] = [route[0]];
+
+  for (let i = 1; i < route.length; i++) {
+    const start = safeRoute[safeRoute.length - 1];
+    const end = route[i];
+
+    // Encontrar un camino seguro entre start y end
+    const segmentPath = aStarPathfinding(start, end, PREDEFINED_OBSTACLES);
+
+    // segmentPath incluye start, así que evitamos duplicarlo
+    safeRoute.push(...segmentPath.slice(1));
+  }
+
+  return safeRoute;
+}
+
   return (
     <div>
       <DevToolbar
@@ -305,7 +386,19 @@ useEffect(() => {
           setSimTimeSec(0);
           setCurrentScheduledRouteId('');
         }}
+        editMode={editMode}
+        onEditModeChange={setEditMode}
+        saveObstacle={handleSaveObstacle}
+        clearObstacle={clearObstacle}
       />
+
+      {/* Modal para guardar obstáculo */}
+      {showSaveObstacleModal && (
+        <SaveObstacleModal
+          points={obstacle}
+          onClose={() => setShowSaveObstacleModal(false)}
+        />
+      )}
 
       {/* Modal para guardar ruta */}
       {showSaveModal && (
@@ -342,10 +435,25 @@ useEffect(() => {
           <Stage
             width={stageDims.w}
             height={stageDims.h}
+            scaleX={stageScale}
+            scaleY={stageScale}
+            x={stagePosition.x}
+            y={stagePosition.y}
+            onWheel={handleWheel}
             onMouseDown={onStageClick}
             style={{ cursor: CAN_EDIT && editing ? 'crosshair' : 'default' }}
           >
             <BackgroundLayer w={stageDims.w} h={stageDims.h} bgImg={bgImg} scale={stageDims.scale} />
+            <ObstaclesLayer
+              w={stageDims.w}
+              h={stageDims.h}
+              obstacles={PREDEFINED_OBSTACLES}
+              editingObstacle={editMode === 'obstacle' ? obstacle : undefined}
+              editing={editing && editMode === 'obstacle'}
+              canEdit={CAN_EDIT}
+              setObstacle={setObstacle}
+              showObstacles={editing && editMode === 'obstacle'} // 🆕 Mostrar solo en edición de obstáculos
+            />
             <HUDLayer
               w={stageDims.w}
               clock={formatHM(simTimeSec)}

@@ -1,4 +1,6 @@
 import grua_horquilla from '../assets/Simulacion/GRUA_HORQUILLA.png';
+import camion_1 from '../assets/Simulacion/T2 VERDE OSCURO.png';
+
 export type ActorType = 'truck1' | 'truck2' | 'truck3' | 'truck4' | 'crane1';
 
 export type ActorConfig = {
@@ -15,7 +17,7 @@ export const ACTOR_DEFINITIONS: Record<ActorType, Omit<ActorConfig, 'count'>> = 
   truck1: {
     id: 'truck1',
     name: 'Camión Tipo 1',
-    imagePath: '/images/truck1.png',
+    imagePath: camion_1,
     speed: 0.8,
     size: { width: 80, height: 120 }
   },

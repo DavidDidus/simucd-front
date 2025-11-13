@@ -2,6 +2,7 @@ import type { PredefinedRoute } from './routes';
 import { PREDEFINED_ROUTES } from './routes';
 import { findTransitionPath } from './pathfinding';
 import type { Point } from '../../types';
+import type { PredefinedObstacle } from '../../types/obstacles';
 
 export type ScheduledRoute = {
   routeId: string;
@@ -61,16 +62,18 @@ export function createRouteTransition(
   currentPosition: Point,
   currentRoute: PredefinedRoute,
   targetRoute: PredefinedRoute,
+  obstacles: PredefinedObstacle[] = [], // 🆕 Parámetro de obstáculos
   useCurvedPath: boolean = true
 ): RouteTransition {
-  console.log(`🎯 Creando transición desde ${currentRoute.name} hacia el INICIO de ${targetRoute.name}`);
+  console.log(`🎯 Creando transición desde ${currentRoute.name} hacia ${targetRoute.name}`);
+  console.log(`🚧 Considerando ${obstacles.length} obstáculos`);
   console.log(`📍 Posición actual:`, currentPosition);
   console.log(`🎯 Objetivo (inicio de ruta):`, targetRoute.points[0]);
   
   const transitionPath = findTransitionPath(
     currentPosition,
     targetRoute.points,
-    useCurvedPath
+    obstacles // 🆕 Pasar obstáculos
   );
 
   return {
@@ -82,6 +85,7 @@ export function createRouteTransition(
     targetReached: false
   };
 }
+
 
 export function getScheduleWithRouteDetails(): Array<{ schedule: ScheduledRoute; route: PredefinedRoute }> {
   return ROUTE_SCHEDULE.map(schedule => {
