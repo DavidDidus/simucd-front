@@ -1,54 +1,71 @@
 import { Layer, Image as KonvaImage } from 'react-konva';
 import type { PathPx } from '../../../utils/path';
 import { poseAlongPath } from '../../../utils/path';
-import type { ActorConfig } from '../../../types/actors';
+import type { ActorState } from '../../../types/actors';
 
 type Props = {
-  actors: ActorConfig[];
+  actor: ActorState
   path: PathPx;
   cursor: number;
   scale: number;
   editing: boolean;
+  stageWidth: number;
+  stageHeight: number;
 };
 
-export default function ActorsLayer({ actors, path, cursor, scale, editing }: Props) {
-  if (editing || path.total <= 0) return null;
+export default function ActorsLayer({ 
+  actor, 
+  path, 
+  cursor, 
+  scale, 
+  editing,
+  stageWidth,
+  stageHeight 
+}: Props) {
+  if (editing) return null;
+  if (!actor.image) return null;
+
+  const img = actor.image;
+  const scaleX = (actor.size.width / img.width) * scale;
+  const scaleY = (actor.size.height / img.height) * scale;
 
   return (
     <Layer>
-      {actors.map((actor) => {
-        if (actor.count <= 0) return null;
-        
-        const img = actor.image;
-        if (!img) return null;
-        
-        const spacing = path.total / Math.max(1, actor.count);
-        
-        return Array.from({ length: actor.count }).map((_, i) => {
-          const actorCursor = cursor * actor.speed; // 👈 Aplicar velocidad al cursor
-          const offset = spacing * i;              // 👈 Separación simple entre actores
-          const pose = poseAlongPath(path, (actorCursor + offset) % path.total);
-          
-          // 🆕 Calcular escala basada en el tamaño definido vs tamaño real de la imagen
-          const scaleX = (actor.size.width / img.width) * scale;
-          const scaleY = (actor.size.height / img.height) * scale;
-          
+      {/* 🆕 Renderizar actor estacionado */}
+      {actor.behavior === 'stationary' && actor.parkingPosition ? (
+        <KonvaImage
+          image={img}
+          x={actor.parkingPosition.x * stageWidth}
+          y={actor.parkingPosition.y * stageHeight}
+          offsetX={img.width / 2}
+          offsetY={img.height / 2}
+          scaleX={scaleX}
+          scaleY={scaleY}
+          rotation={actor.parkingPosition.rotation || 0}
+          listening={false}
+          opacity={0.85}
+        />
+      ) : null}
+
+      {/* 🆕 Renderizar actor móvil */}
+      {actor.behavior === 'mobile' && path.total > 0 ? (
+        (() => {
+          const pose = poseAlongPath(path, cursor % path.total);
           return (
             <KonvaImage
-              key={`${actor.id}-${i}`}
               image={img}
               x={pose.x}
               y={pose.y}
               offsetX={img.width / 2}
               offsetY={img.height / 2}
-              scaleX={scaleX} // 👈 Usando escala calculada
-              scaleY={scaleY} // 👈 Usando escala calculada
+              scaleX={scaleX}
+              scaleY={scaleY}
               rotation={pose.rot}
               listening={false}
             />
           );
-        });
-      })}
+        })()
+      ) : null}
     </Layer>
   );
 }

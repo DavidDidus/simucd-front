@@ -4,7 +4,8 @@ import SimSidebar from './SimSidebar';
 import SaveRouteModal from './modals/SaveRouteModal';
 import BG_IMPORT from '../../assets/Simulacion/PATIO.png';
 import type { Point, ShiftResources } from '../../types';
-import type { ActorType } from '../../types/actors';
+import type { PathPx } from '../../utils/path';
+import type { ActorType, ActorState } from '../../types/actors';
 import { CAN_EDIT } from '../../utils/env';
 import { buildPathPx, toNorm } from '../../utils/path';
 import { formatHM, shiftForSecond, shiftLabel as labelOf } from '../../utils/time';
@@ -15,9 +16,11 @@ import { useHTMLImage } from '../../hooks/useHTMLImage';
 import { useStageSize } from '../../hooks/useStageSize';
 import { useRoute } from '../../hooks/useRoute';
 import { useActorImages } from '../../hooks/useActorImages';
+import { useActorStates } from '../../hooks/useActorStates';
 import { useObstacle} from '../../hooks/useObstacle';
 import { PREDEFINED_OBSTACLES } from '../../utils/routes/obstacles';
 import { aStarPathfinding } from '../../utils/routes/pathfinding';
+import ParkingSlotsLayer from './layers/ParkingSlotLayer';
 import SaveObstacleModal from './modals/SaveObstacleModal';
 import ObstaclesLayer from './layers/ObstaclesLayer';
 import BackgroundLayer from './layers/BackgroundLayer';
@@ -58,18 +61,23 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
   const [showSaveObstacleModal, setShowSaveObstacleModal] = useState(false);
   const { obstacle, setObstacle, clearObstacle } = useObstacle([]);
 
-  const [routeTransition, setRouteTransition] = useState<RouteTransition | null>(null);
 
   useEffect(() => { if (!CAN_EDIT) setEditing(false); }, []);
   const { route, setRoute, saveRoute, loadRoute, clearRoute } = useRoute(DEFAULT_ROUTE);
 
+  const [activeRouteId, setActiveRouteId] = useState<string>(
+  PREDEFINED_ROUTES[0]?.id || 'route-default'
+);
+
+const initialRouteIdRef = useRef<string>(
+  PREDEFINED_ROUTES[0]?.id || 'route-default'
+);
+
+
   // 🆕 Estado para seguimiento de ruta programada
-  const [currentScheduledRouteId, setCurrentScheduledRouteId] = useState<string>('');
 
   // Simulación: reloj + cursor
   const [simTimeSec, setSimTimeSec] = useState(0);
-  const [cursor, setCursor] = useState(0);
-  const dirRef = useRef<1 | -1>(1);
   const [speedMult, setSpeedMult] = useState<number>(1);
   
   //Borrar estos dos despues de configurar los obstaculos
@@ -84,45 +92,6 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
     [route, stageDims.w, stageDims.h]
   );
 
-  // 🆕 Cambio automático de ruta basado en horario usando rutas del JSON
-  useEffect(() => {
-    if (editing) return;
-
-    const { route: activeRoute, schedule } = getActiveScheduledRoute(simTimeSec);
-    
-    if (activeRoute.id !== currentScheduledRouteId && !routeTransition) {
-      console.log(`🔄 Iniciando transición a ruta: "${activeRoute.name}" considerando obstáculos`);
-      
-      // Obtener posición actual del actor
-      let currentPosition: Point;
-      if (pathPx.total > 0 && cursor >= 0) {
-        const pose = poseAlongPath(pathPx, cursor);
-        currentPosition = {
-          x: pose.x / stageDims.w,
-          y: pose.y / stageDims.h
-        };
-      } else {
-        currentPosition = route[0] || { x: 0.5, y: 0.5 };
-      }
-
-      // Crear transición con obstáculos
-      const currentRoute = PREDEFINED_ROUTES.find(r => r.id === currentScheduledRouteId);
-      if (currentRoute) {
-        const transition = createRouteTransition(
-          currentPosition, 
-          currentRoute, 
-          activeRoute,
-          PREDEFINED_OBSTACLES // 🆕 Pasar obstáculos
-        );
-        setRouteTransition(transition);
-      } else {
-        setCurrentScheduledRouteId(activeRoute.id);
-        setRoute(applyAvoidObstaclesToRoute(activeRoute.points));
-        setCursor(0);
-      }
-    }
-  }, [simTimeSec, editing, currentScheduledRouteId, routeTransition, pathPx, cursor, stageDims]);
-
   // Recursos por turno
   const [resources, setResources] = useState<ShiftResources>({ noche: 0, turnoA: 0, turnoB: 0 });
   useEffect(() => {
@@ -134,9 +103,10 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
     }));
   }, [resourcesProp]);
 
+  
   // Configuración de actores - solo grúas
   const [actorCounts] = useState<Record<ActorType, number>>({
-    truck1: 4,
+    truck1: 14,
     truck2: 0,
     truck3: 0,
     truck4: 0,
@@ -146,10 +116,8 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
   // Hook para cargar imágenes de actores
   const { actors, loading: actorsLoading } = useActorImages(actorCounts);
 
-  const [selectedRouteId, setSelectedRouteId] = useState<string>(
-    PREDEFINED_ROUTES[0]?.id || 'route-default'
-  );
-
+  const { actorStates, setActorStates } = useActorStates(actors, actorsLoading, actorCounts, initialRouteIdRef.current);
+  
   const handleRouteSelect = (routeId: string) => {
     if (editing) {
       alert('Termina de editar la ruta actual primero');
@@ -158,9 +126,26 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
     
     const selectedRoute = PREDEFINED_ROUTES.find((r) => r.id === routeId);
     if (selectedRoute) {
-      setSelectedRouteId(routeId);
+      console.log(`🎯 Ruta seleccionada manualmente: "${selectedRoute.name}"`);
+      setActiveRouteId(routeId);
+      
       const safePoints = applyAvoidObstaclesToRoute(selectedRoute.points);
       setRoute(safePoints);
+      
+      // Actualizar actores móviles
+      setActorStates(prevStates =>
+        prevStates.map(actor => {
+          if (actor.behavior === 'mobile') {
+            return {
+              ...actor,
+              routeId: routeId,
+              cursor: 0,
+              direction: 1
+            };
+          }
+          return actor;
+        })
+      );
     }
   };
 
@@ -203,6 +188,7 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
   setStageScale(finalScale);
   setStagePosition(newPos);
 };
+/*
 
  // 🆕 Manejar progreso de transición actualizado
   useEffect(() => {
@@ -235,72 +221,193 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
 
     return () => clearInterval(interval);
   }, [routeTransition, running, editing, setRoute]);
+*/
 
-  // 🆕 Usar ruta de transición si está activa, sino usar la ruta normal
-  const effectiveRoute = useMemo(() => {
-    if (routeTransition) {
-      return routeTransition.transitionPath;
-    }
-    return route;
-  }, [routeTransition, route]);
-
-  const effectivePathPx = useMemo(
-    () => buildPathPx(effectiveRoute, stageDims.w, stageDims.h),
-    [effectiveRoute, stageDims.w, stageDims.h]
-  );
-
-  // 🆕 Cursor especial para transiciones
-  const effectiveCursor = useMemo(() => {
-    if (routeTransition) {
-      // Durante la transición, el cursor sigue el progreso de la transición
-      return routeTransition.progress * effectivePathPx.total;
-    }
-    return cursor;
-  }, [routeTransition, effectivePathPx.total, cursor]);
-
-  // Ticker actualizado para usar cursor efectivo
+    
   useEffect(() => {
-    const active = running && !editing && effectivePathPx.total > 0 && !actorsLoading && actors.length > 0;
-    if (!active) return;
+  if (editing) return;
 
-    // 🆕 No actualizar cursor durante transición
-    if (routeTransition) return;
+  const { route: scheduledRoute } = getActiveScheduledRoute(simTimeSec);
+  
+  if (scheduledRoute.id !== activeRouteId) {
+    console.log(`⏰ Iniciando transición a ruta programada: "${scheduledRoute.name}"`);
+    
+    // 🔑 Para cada actor móvil, crear transición individual
+    setActorStates(prevStates =>
+      prevStates.map(actor => {
+        if (actor.behavior !== 'mobile') return actor;
 
-    let raf = 0;
-    let last = performance.now();
+        // Obtener posición actual del actor
+        const currentRoute = PREDEFINED_ROUTES.find(r => r.id === actor.routeId);
+        if (!currentRoute) return actor;
 
-    const tick = (now: number) => {
-      const dtReal = (now - last) / 1000;
-      last = now;
-      const dtSim = dtReal * speedMult;
+        const currentPathPx = buildPathPx(currentRoute.points, stageDims.w, stageDims.h);
+        if (currentPathPx.total === 0) return actor;
 
-      if (LOOP_DAY) {
-        setSimTimeSec(t => (t + dtSim) % SIM_DAY_SECONDS);
-      } else {
-        let stop = false;
-        setSimTimeSec(t => {
-          const next = t + dtSim;
-          if (next >= SIM_DAY_SECONDS) { stop = true; return SIM_DAY_SECONDS; }
-          return next;
-        });
-        if (stop) return;
-      }
+        // Calcular posición actual en coordenadas normalizadas
+        const pose = poseAlongPath(currentPathPx, actor.cursor);
+        const currentPosition: Point = {
+          x: pose.x / stageDims.w,
+          y: pose.y / stageDims.h
+        };
 
-      const SPEED_PX_PER_SIM_SEC = stageDims.w * 0.03;
-      setCursor(prev => {
-        let next = prev + dirRef.current * SPEED_PX_PER_SIM_SEC * dtSim;
-        if (next > effectivePathPx.total) { next = effectivePathPx.total; dirRef.current = -1; }
-        if (next < 0) { next = 0; dirRef.current = 1; }
+        // 🆕 Crear transición usando A* hacia el inicio de la nueva ruta
+        const targetPosition = scheduledRoute.points[0]; // Primer punto de la nueva ruta
+        
+        // 🔑 Usar A* para encontrar camino evitando obstáculos
+        const transitionPath = aStarPathfinding(
+          currentPosition,
+          targetPosition,
+          PREDEFINED_OBSTACLES
+        );
+
+        console.log(`🔄 Actor ${actor.id}: Transición de "${currentRoute.name}" a "${scheduledRoute.name}"`);
+        console.log(`   Posición actual: (${currentPosition.x.toFixed(3)}, ${currentPosition.y.toFixed(3)})`);
+        console.log(`   Destino: (${targetPosition.x.toFixed(3)}, ${targetPosition.y.toFixed(3)})`);
+        console.log(`   Puntos de transición: ${transitionPath.length}`);
+
+        // Crear objeto de transición
+        const transition: RouteTransition = {
+          isTransitioning: true,
+          transitionPath: transitionPath,
+          fromRoute: currentRoute,
+          toRoute: scheduledRoute,
+          progress: 0,
+          targetReached: false
+        };
+
+        return {
+          ...actor,
+          currentTransition: transition,
+          cursor: 0, // Cursor de transición comienza en 0
+          direction: 1 // Siempre hacia adelante en transiciones
+        };
+      })
+    );
+
+    setActiveRouteId(scheduledRoute.id);
+  }
+}, [simTimeSec, editing, activeRouteId, stageDims.w, stageDims.h, setActorStates]);
+
+
+
+  useEffect(() => {
+  const active = running && !editing && !actorsLoading && actorStates.length > 0;
+  if (!active) return;
+
+  let raf = 0;
+  let last = performance.now();
+
+  const tick = (now: number) => {
+    const dtReal = (now - last) / 1000;
+    last = now;
+    const dtSim = dtReal * speedMult;
+
+    // Actualizar reloj
+    if (LOOP_DAY) {
+      setSimTimeSec(t => (t + dtSim) % SIM_DAY_SECONDS);
+    } else {
+      let stop = false;
+      setSimTimeSec(t => {
+        const next = t + dtSim;
+        if (next >= SIM_DAY_SECONDS) { stop = true; return SIM_DAY_SECONDS; }
         return next;
       });
+      if (stop) return;
+    }
 
-      raf = requestAnimationFrame(tick);
-    };
+    // 🔑 ACTUALIZAR ACTORES (transiciones Y movimiento normal)
+    setActorStates(prevStates => 
+      prevStates.map(actor => {
+        if (actor.behavior !== 'mobile') return actor;
+
+        // 🆕 CASO 1: Actor en transición
+        if (actor.currentTransition?.isTransitioning) {
+          const transition = actor.currentTransition;
+          const transitionPathPx = buildPathPx(transition.transitionPath, stageDims.w, stageDims.h);
+          
+          if (transitionPathPx.total === 0) {
+            console.warn('⚠️ Path de transición vacío, finalizando transición');
+            return {
+              ...actor,
+              currentTransition: undefined,
+              routeId: transition.toRoute.id,
+              cursor: 0,
+              direction: 1
+            };
+          }
+
+          const SPEED = stageDims.w * 0.02; // Velocidad para transiciones
+          let newCursor = actor.cursor + (SPEED * dtSim);
+          
+          // 🔑 Si llegó al final de la transición
+          if (newCursor >= transitionPathPx.total) {
+            console.log(`✅ Actor ${actor.id}: Transición completada a "${transition.toRoute.name}"`);
+            return {
+              ...actor,
+              currentTransition: undefined,
+              routeId: transition.toRoute.id,
+              cursor: 0,
+              direction: 1
+            };
+          }
+
+          // Continuar transición
+          return {
+            ...actor,
+            cursor: newCursor,
+            currentTransition: {
+              ...transition,
+              progress: newCursor / transitionPathPx.total,
+              targetReached: newCursor > transitionPathPx.total * 0.95
+            }
+          };
+        }
+
+        // 🆕 CASO 2: Movimiento normal (sin transición)
+        const actorRoute = PREDEFINED_ROUTES.find(r => r.id === actor.routeId);
+        if (!actorRoute) {
+          console.warn(`⚠️ Actor ${actor.id} tiene routeId inválido: ${actor.routeId}`);
+          return actor;
+        }
+
+        const actorPathPx = buildPathPx(actorRoute.points, stageDims.w, stageDims.h);
+        if (actorPathPx.total === 0) {
+          console.warn(`⚠️ Ruta "${actorRoute.name}" no tiene puntos válidos`);
+          return actor;
+        }
+
+        const SPEED = stageDims.w * 0.03 * actor.speed;
+        const currentDirection = actor.direction || 1;
+        
+        let newCursor = actor.cursor + (SPEED * dtSim * currentDirection);
+        let newDirection = currentDirection;
+        
+        // Rebote en los extremos
+        if (newCursor >= actorPathPx.total) {
+          newCursor = actorPathPx.total;
+          newDirection = -1;
+        } else if (newCursor <= 0) {
+          newCursor = 0;
+          newDirection = 1;
+        }
+        
+        return { 
+          ...actor, 
+          cursor: newCursor,
+          direction: newDirection
+        };
+      })
+    );
 
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [running, editing, effectivePathPx.total, stageDims.w, actorsLoading, actors.length, speedMult, routeTransition]);
+  };
 
+  raf = requestAnimationFrame(tick);
+  return () => cancelAnimationFrame(raf);
+ }, [running, editing, actorStates.length, stageDims.w, stageDims.h, speedMult, actorsLoading]);
+
+ 
   // Escala dinámica basada en el tamaño del stage
   const actorScale = useMemo(() => {
     const targetScale = stageDims.w * 0.00008;
@@ -350,7 +457,6 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
   };
 
   // 🆕 Información de ruta actual y horarios programados
-  const currentRouteInfo = PREDEFINED_ROUTES.find(r => r.id === currentScheduledRouteId);
   const scheduleDetails = getScheduleWithRouteDetails();
 
   function applyAvoidObstaclesToRoute(route: Point[]): Point[] {
@@ -372,6 +478,10 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
   return safeRoute;
 }
 
+const mobileActors = actorStates.filter(a => a.behavior === 'mobile');
+const stationaryActors = actorStates.filter(a => a.behavior === 'stationary');
+
+
   return (
     <div>
       <DevToolbar
@@ -384,7 +494,6 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
         setResources={setResources}
         resetClock={() => {
           setSimTimeSec(0);
-          setCurrentScheduledRouteId('');
         }}
         editMode={editMode}
         onEditModeChange={setEditMode}
@@ -464,18 +573,47 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
             <RouteLayer
               w={stageDims.w}
               h={stageDims.h}
-              route={effectiveRoute}
+              route={route}
               editing={editing}
               canEdit={CAN_EDIT}
               setRoute={setRoute}
             />
-            <ActorsLayer
-              actors={actors}
-              path={effectivePathPx}
-              cursor={effectiveCursor}
-              scale={actorScale}
-              editing={editing}
+            <ParkingSlotsLayer
+              stageWidth={stageDims.w}
+              stageHeight={stageDims.h}
+              showLabels={editing}
             />
+
+            {actorStates.map(actor => {
+              let pathToRender: PathPx;
+              
+              // 🔑 Si está en transición, usar el path de transición
+              if (actor.currentTransition?.isTransitioning) {
+                pathToRender = buildPathPx(
+                  actor.currentTransition.transitionPath, 
+                  stageDims.w, 
+                  stageDims.h
+                );
+              } else {
+                // Usar ruta normal del actor
+                const route = PREDEFINED_ROUTES.find(r => r.id === actor.routeId);
+                if (!route) return null;
+                pathToRender = buildPathPx(route.points, stageDims.w, stageDims.h);
+              }
+              
+              return (
+                <ActorsLayer
+                  key={actor.id}
+                  actor={actor}
+                  path={pathToRender} // 🔑 Path dinámico (transición o normal)
+                  cursor={actor.cursor}
+                  scale={actorScale}
+                  editing={editing}
+                  stageWidth={stageDims.w}
+                  stageHeight={stageDims.h}
+                />
+              );
+            })}
           </Stage>
         </div>
 
@@ -485,67 +623,83 @@ export default function Simulation2D({ running = true, resources: resourcesProp 
           onSpeedChange={setSpeedMult}
           resources={resources}
           currentShift={currentShift}
-          selectedRouteId={selectedRouteId}
+          selectedRouteId={activeRouteId}
           onRouteSelect={handleRouteSelect} 
         />
       </div>
 
       {/* 🆕 Panel de información mejorado con rutas del JSON */}
       <div style={{ 
-        position: 'fixed', 
-        bottom: 10, 
-        right: 10, 
-        background: 'white', 
-        padding: 10, 
-        border: '1px solid #ccc',
-        borderRadius: 8,
-        fontSize: '12px',
-        maxWidth: 280
-      }}>
-       <h4>📍 Estado de Rutas:</h4>
-        
-        {routeTransition ? (
-          <div style={{ background: '#fff3cd', padding: '5px', borderRadius: '4px', marginBottom: '8px' }}>
-            <div><strong>🔄 Transicionando...</strong></div>
-            <div>De: {routeTransition.fromRoute?.name}</div>
-            <div>A: {routeTransition.toRoute.name}</div>
-            <div>Progreso: {Math.round(routeTransition.progress * 100)}%</div>
+  position: 'fixed', 
+  bottom: 10, 
+  right: 10, 
+  background: 'white', 
+  padding: 10, 
+  border: '1px solid #ccc',
+  borderRadius: 8,
+  fontSize: '12px',
+  maxWidth: 280
+}}>
+  <h4>📍 Estado de Rutas:</h4>
+  
+  {/* 🆕 Mostrar transiciones activas de los actores */}
+  {actorStates.some(a => a.currentTransition?.isTransitioning) ? (
+    <div style={{ background: '#fff3cd', padding: '5px', borderRadius: '4px', marginBottom: '8px' }}>
+      {actorStates
+        .filter(a => a.currentTransition?.isTransitioning)
+        .map(actor => (
+          <div key={actor.id} style={{ marginBottom: '8px' }}>
+            <div><strong>🔄 {actor.id} transicionando...</strong></div>
+            <div style={{ fontSize: '10px' }}>
+              De: {actor.currentTransition?.fromRoute?.name}
+            </div>
+            <div style={{ fontSize: '10px' }}>
+              A: {actor.currentTransition?.toRoute.name}
+            </div>
+            <div style={{ fontSize: '10px' }}>
+              Progreso: {Math.round((actor.currentTransition?.progress || 0) * 100)}%
+            </div>
             <div style={{ 
               background: '#007bff', 
               height: '4px', 
               borderRadius: '2px',
-              marginTop: '4px'
+              marginTop: '4px',
+              marginBottom: '4px'
             }}>
               <div style={{
                 background: '#28a745',
                 height: '100%',
-                width: `${routeTransition.progress * 100}%`,
+                width: `${(actor.currentTransition?.progress || 0) * 100}%`,
                 borderRadius: '2px',
                 transition: 'width 0.1s'
               }} />
             </div>
           </div>
-        ) : currentRouteInfo && (
-          <>
-            <div><strong>{currentRouteInfo.name}</strong></div>
-            <div style={{ fontSize: '10px', opacity: 0.8 }}>{currentRouteInfo.description}</div>
-          </>
-        )}
-        
-        <div>Hora actual: {formatHM(simTimeSec)}</div>
-        <hr style={{ margin: '8px 0' }} />
-        <div>Horarios programados:</div>
-        {scheduleDetails.map(({ schedule, route }) => (
-          <div key={schedule.routeId} style={{ 
-            fontSize: '10px', 
-            opacity: route.id === currentScheduledRouteId ? 1 : 0.6,
-            fontWeight: route.id === currentScheduledRouteId ? 'bold' : 'normal',
-            padding: '2px 0'
-          }}>
-            {schedule.startTime} - {route.name}
-          </div>
         ))}
-      </div>
+    </div>
+  ) : (
+    <div>
+      <strong>Ruta activa:</strong> {PREDEFINED_ROUTES.find(r => r.id === activeRouteId)?.name || 'N/A'}
+    </div>
+  )}
+  
+  <div>🚛 Estacionados: {stationaryActors.length}</div>
+  <div>🏃 Móviles: {mobileActors.length}</div>
+  <hr style={{ margin: '8px 0' }} />
+  <div>Hora actual: {formatHM(simTimeSec)}</div>
+  <hr style={{ margin: '8px 0' }} />
+  <div>Horarios programados:</div>
+  {scheduleDetails.map(({ schedule, route }) => (
+    <div key={schedule.routeId} style={{ 
+      fontSize: '10px', 
+      opacity: route.id === activeRouteId ? 1 : 0.6,
+      fontWeight: route.id === activeRouteId ? 'bold' : 'normal',
+      padding: '2px 0'
+    }}>
+      {schedule.startTime} - {route.name}
+    </div>
+  ))}
+</div>
     </div>
   );
 }

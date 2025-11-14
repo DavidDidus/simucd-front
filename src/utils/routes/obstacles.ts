@@ -27,7 +27,6 @@ export function saveObstacle(obstacle: Omit<PredefinedObstacle, 'id'>): Predefin
 
 // Función para verificar si un punto está dentro de un obstáculo
 export function isPointInObstacle(point: { x: number; y: number }, obstacle: PredefinedObstacle): boolean {
-    console.log(obstacle,"b");
   if (obstacle.points.length < 3) return false;
   
   // Algoritmo de ray casting para determinar si el punto está dentro del polígono

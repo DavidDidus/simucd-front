@@ -17,7 +17,7 @@
       "name": "Ruta bodega norte",
       "description": "Desde entrada hacia zona de almacenamiento norte",
       "points": [
-        { "x": 0.1, "y": 0.8 },
+        { "x": 0.5, "y": 0.8 },
         { "x": 0.3, "y": 0.7 },
         { "x": 0.5, "y": 0.3 },
         { "x": 0.7, "y": 0.2 }
