@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Stage } from 'react-konva';
+import { Stage,Layer } from 'react-konva';
 import SimSidebar from './SimSidebar';
 import SaveRouteModal from './modals/SaveRouteModal';
 import BG_IMPORT from '../../assets/Simulacion/PATIO.png';
@@ -26,7 +26,7 @@ import ObstaclesLayer from './layers/ObstaclesLayer';
 import BackgroundLayer from './layers/BackgroundLayer';
 import HUDLayer from './layers/HudLayer';
 import RouteLayer from './layers/RouteLayer';
-import ActorsLayer from './layers/ActorsLayer';
+import ActorShape from './layers/ActorsLayer';
 import DevToolbar from './DevToolbar';
 
 
@@ -106,7 +106,7 @@ const initialRouteIdRef = useRef<string>(
   
   // Configuración de actores - solo grúas
   const [actorCounts] = useState<Record<ActorType, number>>({
-    truck1: 14,
+    truck1: 26,
     truck2: 0,
     truck3: 0,
     truck4: 0,
@@ -151,79 +151,7 @@ const initialRouteIdRef = useRef<string>(
 
   const currentShift = useMemo(() => shiftForSecond(simTimeSec), [simTimeSec]);
   const activeCount = useMemo(() => Math.min(20, Math.max(0, resources[currentShift])), [resources, currentShift]);
-
-  //Borrame despues de configurar los obstaculos
-  const handleWheel = (e: any) => {
-  // Solo permitir zoom cuando estás editando obstáculos (opcional)
-  if (!editing || editMode !== 'obstacle') return;
-
-  e.evt.preventDefault();
-
-  const scaleBy = 1.05;
-  const stage = e.target.getStage();
-  const oldScale = stageScale;
-  const pointer = stage.getPointerPosition();
-  if (!pointer) return;
-
-  // Coordenadas del mouse en el “mundo” antes de cambiar escala
-  const mousePointTo = {
-    x: (pointer.x - stagePosition.x) / oldScale,
-    y: (pointer.y - stagePosition.y) / oldScale,
-  };
-
-  // Rueda arriba = zoom in, abajo = zoom out
-  const direction = e.evt.deltaY > 0 ? -1 : 1;
-  const newScale =
-    direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
-
-  // Limitar un poco el zoom
-  const finalScale = Math.max(0.5, Math.min(4, newScale));
-
-  // Ajustar posición para que el punto bajo el cursor se mantenga
-  const newPos = {
-    x: pointer.x - mousePointTo.x * finalScale,
-    y: pointer.y - mousePointTo.y * finalScale,
-  };
-
-  setStageScale(finalScale);
-  setStagePosition(newPos);
-};
-/*
-
- // 🆕 Manejar progreso de transición actualizado
-  useEffect(() => {
-    if (!routeTransition || !running || editing) return;
-
-    const transitionSpeed = 0.015; // Velocidad de transición más lenta para que se vea mejor
-    const interval = setInterval(() => {
-      setRouteTransition(prev => {
-        if (!prev) return null;
-
-        const newProgress = prev.progress + transitionSpeed;
-        
-        if (newProgress >= 1) {
-          // 🆕 Transición completada - actor ahora está en el INICIO de la nueva ruta
-          console.log(`✅ Transición completada. Actor llegó al inicio de: ${prev.toRoute.name}`);
-          setCurrentScheduledRouteId(prev.toRoute.id);
-          setRoute(applyAvoidObstaclesToRoute(prev.toRoute.points));
-          
-          // 🆕 CRUCIAL: Establecer cursor en 0 para que comience desde el inicio
-          // Sin resetear cursor, porque ya está en el inicio correcto
-          const initialCursor = 0;
-          setCursor(initialCursor);
-          
-          return null; // Finalizar transición
-        }
-
-        return { ...prev, progress: newProgress, targetReached: newProgress > 0.95 };
-      });
-    }, 50); // Actualizar cada 50ms
-
-    return () => clearInterval(interval);
-  }, [routeTransition, running, editing, setRoute]);
-*/
-
-    
+   
   useEffect(() => {
   if (editing) return;
 
@@ -548,7 +476,6 @@ const stationaryActors = actorStates.filter(a => a.behavior === 'stationary');
             scaleY={stageScale}
             x={stagePosition.x}
             y={stagePosition.y}
-            onWheel={handleWheel}
             onMouseDown={onStageClick}
             style={{ cursor: CAN_EDIT && editing ? 'crosshair' : 'default' }}
           >
@@ -584,36 +511,36 @@ const stationaryActors = actorStates.filter(a => a.behavior === 'stationary');
               showLabels={editing}
             />
 
-            {actorStates.map(actor => {
-              let pathToRender: PathPx;
-              
-              // 🔑 Si está en transición, usar el path de transición
-              if (actor.currentTransition?.isTransitioning) {
-                pathToRender = buildPathPx(
-                  actor.currentTransition.transitionPath, 
-                  stageDims.w, 
-                  stageDims.h
+            <Layer>
+              {actorStates.map(actor => {
+                let pathToRender: PathPx;
+                
+                if (actor.currentTransition?.isTransitioning) {
+                  pathToRender = buildPathPx(
+                    actor.currentTransition.transitionPath, 
+                    stageDims.w, 
+                    stageDims.h
+                  );
+                } else {
+                  const route = PREDEFINED_ROUTES.find(r => r.id === actor.routeId);
+                  if (!route) return null;
+                  pathToRender = buildPathPx(route.points, stageDims.w, stageDims.h);
+                }
+                
+                return (
+                  <ActorShape
+                    key={actor.id}
+                    actor={actor}
+                    path={pathToRender}
+                    cursor={actor.cursor}
+                    scale={actorScale}
+                    editing={editing}
+                    stageWidth={stageDims.w}
+                    stageHeight={stageDims.h}
+                  />
                 );
-              } else {
-                // Usar ruta normal del actor
-                const route = PREDEFINED_ROUTES.find(r => r.id === actor.routeId);
-                if (!route) return null;
-                pathToRender = buildPathPx(route.points, stageDims.w, stageDims.h);
-              }
-              
-              return (
-                <ActorsLayer
-                  key={actor.id}
-                  actor={actor}
-                  path={pathToRender} // 🔑 Path dinámico (transición o normal)
-                  cursor={actor.cursor}
-                  scale={actorScale}
-                  editing={editing}
-                  stageWidth={stageDims.w}
-                  stageHeight={stageDims.h}
-                />
-              );
-            })}
+              })}
+            </Layer>
           </Stage>
         </div>
 

@@ -13,7 +13,7 @@ type Props = {
   stageHeight: number;
 };
 
-export default function ActorsLayer({ 
+export default function ActorShape({ 
   actor, 
   path, 
   cursor, 
@@ -29,43 +29,40 @@ export default function ActorsLayer({
   const scaleX = (actor.size.width / img.width) * scale;
   const scaleY = (actor.size.height / img.height) * scale;
 
-  return (
-    <Layer>
-      {/* 🆕 Renderizar actor estacionado */}
-      {actor.behavior === 'stationary' && actor.parkingPosition ? (
-        <KonvaImage
-          image={img}
-          x={actor.parkingPosition.x * stageWidth}
-          y={actor.parkingPosition.y * stageHeight}
-          offsetX={img.width / 2}
-          offsetY={img.height / 2}
-          scaleX={scaleX}
-          scaleY={scaleY}
-          rotation={actor.parkingPosition.rotation || 0}
-          listening={false}
-          opacity={0.85}
-        />
-      ) : null}
+if (actor.behavior === 'stationary' && actor.parkingPosition) {
+    return (
+      <KonvaImage
+        image={img}
+        x={actor.parkingPosition.x * stageWidth}
+        y={actor.parkingPosition.y * stageHeight}
+        offsetX={img.width / 2}
+        offsetY={img.height / 2}
+        scaleX={scaleX}
+        scaleY={scaleY}
+        rotation={actor.parkingPosition.rotation || 0}
+        listening={false}
+        opacity={0.85}
+      />
+    );
+  }
 
-      {/* 🆕 Renderizar actor móvil */}
-      {actor.behavior === 'mobile' && path.total > 0 ? (
-        (() => {
-          const pose = poseAlongPath(path, cursor % path.total);
-          return (
-            <KonvaImage
-              image={img}
-              x={pose.x}
-              y={pose.y}
-              offsetX={img.width / 2}
-              offsetY={img.height / 2}
-              scaleX={scaleX}
-              scaleY={scaleY}
-              rotation={pose.rot}
-              listening={false}
-            />
-          );
-        })()
-      ) : null}
-    </Layer>
-  );
+  // Renderizar actor móvil
+  if (actor.behavior === 'mobile' && path.total > 0) {
+    const pose = poseAlongPath(path, cursor % path.total);
+    return (
+      <KonvaImage
+        image={img}
+        x={pose.x}
+        y={pose.y}
+        offsetX={img.width / 2}
+        offsetY={img.height / 2}
+        scaleX={scaleX}
+        scaleY={scaleY}
+        rotation={pose.rot}
+        listening={false}
+      />
+    );
+  }
+
+  return null;
 }

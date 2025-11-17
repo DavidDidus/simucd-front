@@ -63,7 +63,6 @@ export function createRouteTransition(
   currentRoute: PredefinedRoute,
   targetRoute: PredefinedRoute,
   obstacles: PredefinedObstacle[] = [], // 🆕 Parámetro de obstáculos
-  useCurvedPath: boolean = true
 ): RouteTransition {
   console.log(`🎯 Creando transición desde ${currentRoute.name} hacia ${targetRoute.name}`);
   console.log(`🚧 Considerando ${obstacles.length} obstáculos`);
