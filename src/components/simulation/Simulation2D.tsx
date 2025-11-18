@@ -20,6 +20,7 @@ import { useActorStates } from '../../hooks/useActorStates';
 import { useObstacle} from '../../hooks/useObstacle';
 import { PREDEFINED_OBSTACLES } from '../../utils/routes/obstacles';
 import { aStarPathfinding } from '../../utils/routes/pathfinding';
+import PalletSpawnPointsLayer from './layers/PalletSpawnPointsLayer';
 import ParkingSlotsLayer from './layers/ParkingSlotLayer';
 import SaveObstacleModal from './modals/SaveObstacleModal';
 import ObstaclesLayer from './layers/ObstaclesLayer';
@@ -73,8 +74,7 @@ const initialRouteIdRef = useRef<string>(
   PREDEFINED_ROUTES[0]?.id || 'route-default'
 );
 
-
-  // 🆕 Estado para seguimiento de ruta programada
+  const [showPalletSpawnPoints, setShowPalletSpawnPoints] = useState(false);
 
   // Simulación: reloj + cursor
   const [simTimeSec, setSimTimeSec] = useState(0);
@@ -86,12 +86,6 @@ const initialRouteIdRef = useRef<string>(
 
   const SIM_DAY_SECONDS = 24*60*60; 
   const LOOP_DAY = false;
-
-   const pathPx = useMemo(
-    () => buildPathPx(route, stageDims.w, stageDims.h),
-    [route, stageDims.w, stageDims.h]
-  );
-
   // Recursos por turno
   const [resources, setResources] = useState<ShiftResources>({ noche: 0, turnoA: 0, turnoB: 0 });
   useEffect(() => {
@@ -505,12 +499,19 @@ const stationaryActors = actorStates.filter(a => a.behavior === 'stationary');
               canEdit={CAN_EDIT}
               setRoute={setRoute}
             />
-            <ParkingSlotsLayer
-              stageWidth={stageDims.w}
-              stageHeight={stageDims.h}
-              showLabels={editing}
-            />
-
+                <ParkingSlotsLayer
+                  stageWidth={stageDims.w}
+                  stageHeight={stageDims.h}
+                  showLabels={editing}
+                />
+            {/* 
+            <PalletSpawnPointsLayer
+                stageWidth={stageDims.w}
+                stageHeight={stageDims.h}
+                showLabels={false}
+                showEmptySlots={false}
+              />
+            */}
             <Layer>
               {actorStates.map(actor => {
                 let pathToRender: PathPx;
