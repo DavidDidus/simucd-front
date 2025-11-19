@@ -62,5 +62,40 @@ export const PARKING_ZONES: ParkingZone[] = [
         { id: 'slot-30', x: 0.748, y: 0.635, rotation: 90, occupied: false },
 
     ],
+  },
+  {
+    id: 'zone-load',
+    name: 'Zona de Carga',
+    slots: [
+        { id: 'slot-load-1', x: 0.130, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-2', x: 0.170, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-3', x: 0.210, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-4', x: 0.250, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-5', x: 0.290, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-6', x: 0.330, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-7', x: 0.370, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-8', x: 0.410, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-9', x: 0.450, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-10', x: 0.490, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-11', x: 0.530, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-12', x: 0.570, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-13', x: 0.610, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-14', x: 0.650, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-15', x: 0.690, y: 0.600, rotation: 0, occupied: false },
+        { id: 'slot-load-16', x: 0.730, y: 0.600, rotation: 0, occupied: false },
+    ],
+    allowedTypes: ['truck1', 'truck2']
+  },
+  {
+    id: 'zone-parking-crane',
+    name: 'Zona parking Grúa',
+    slots: [
+        { id: 'slot-crane-1', x: 0.025, y: 0.580, rotation: 180, occupied: false },
+        { id: 'slot-crane-2', x: 0.025, y: 0.600, rotation: 180, occupied: false },
+        { id: 'slot-crane-3', x: 0.025, y: 0.620, rotation: 180, occupied: false },
+        { id: 'slot-crane-4', x: 0.025, y: 0.640, rotation: 180, occupied: false },
+        { id: 'slot-crane-5', x: 0.025, y: 0.660, rotation: 180, occupied: false },
+    ],
+    allowedTypes: ['crane1']
   }
 ];

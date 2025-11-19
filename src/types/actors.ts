@@ -32,8 +32,9 @@ export type ActorState = {
   behavior: ActorBehavior;
   size: { width: number; height: number };
   parkingPosition?: { x: number; y: number; rotation: number };
+  parkingSlotId?: string;
   currentTransition?: RouteTransition;
-  direction?: 1 | -1;
+  direction?: 1 | -1 | 0;
   operationState?: 'idle' | 'moving' | 'loading' | 'unloading';
   taskQueue?: string[]; // Cola de tareas pendientes
 };

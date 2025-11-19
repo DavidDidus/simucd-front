@@ -52,6 +52,7 @@ export function useActorStates(
           behavior: definition.behavior,
           size: definition.size,
           parkingPosition: assignedPosition || definition.parkingPosition,
+          parkingSlotId: assignedPosition?.slotId,
           direction: 1,
           operationState: 'idle'
         };

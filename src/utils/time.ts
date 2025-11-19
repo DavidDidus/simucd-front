@@ -7,6 +7,14 @@ export const formatHM = (totalSec: number) => {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
 
+export const parseHM = (timeStr: string): number => {
+  const [h, m] = timeStr.split(':').map(Number);
+  if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) {
+    return 0; // Valor por defecto si el formato es inválido
+  }
+  return h * 3600 + m * 60;
+};
+
 export const shiftForSecond = (totalSec: number): Shift => {
   const h = Math.floor((Math.floor(totalSec) % 86400) / 3600);
   if (h < 8) return 'noche';

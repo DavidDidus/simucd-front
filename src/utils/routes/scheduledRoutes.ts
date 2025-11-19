@@ -3,6 +3,9 @@ import { PREDEFINED_ROUTES } from './routes';
 import { findTransitionPath } from './pathfinding';
 import type { Point } from '../../types';
 import type { PredefinedObstacle } from '../../types/obstacles';
+import type { SimTask } from '../../types/tasks';
+import { createBaseTask } from '../../types/tasks';
+import { parseHM } from '../time';
 
 export type ScheduledRoute = {
   routeId: string;
@@ -17,6 +20,82 @@ export type RouteTransition = {
   progress: number; // 0 a 1
   targetReached: boolean;
 };
+
+export const SLOT_TO_ROUTE_MAP: Record<string, string> = {
+  'slot-1': 'route-parking-1-patio',
+  'slot-2': 'route-parking-2-patio',
+  'slot-3': 'route-parking-3-patio',
+  'slot-4': 'route-parking-4-patio',
+  'slot-5': 'route-parking-5-patio',
+  'slot-6': 'route-parking-6-patio',
+  'slot-7': 'route-parking-7-patio',
+  'slot-8': 'route-parking-8-patio',
+  'slot-9': 'route-parking-9-patio',
+  'slot-10': 'route-parking-10-patio',
+  'slot-11': 'route-parking-11-patio',
+  'slot-12': 'route-parking-12-patio',
+  'slot-13': 'route-parking-13-patio',
+  'slot-14': 'route-parking-14-patio',
+};
+
+/**
+ * Helper para obtener el routeId asociado a un parkingSlotId.
+ * Devuelve undefined si no hay mapeo.
+ */
+export function getRouteIdForSlot(slotId: string): string | undefined {
+  return SLOT_TO_ROUTE_MAP[slotId];
+}
+
+/**
+ * Crea una SimTask de tipo "followRoute" para un camión estacionado en un slot.
+ *
+ * - truckId: id del actor (ej: "truck1-0")
+ * - actorType: por ahora string (ej: "truck1"), luego lo tipamos con ActorType
+ * - parkingSlotId: id del slot (ej: "slot-1")
+ *
+ * La tarea resultante:
+ *  - type = "followRoute"
+ *  - status = "pending"
+ *  - priority = 1 (por defecto)
+ *  - startAtSimTime = undefined (la decidirá el scheduler)
+ *  - payload.routeId = ruta asignada al slot
+ */
+export function createFollowRouteTaskForTruck(
+  truckId: string,
+  actorType: string,
+  parkingSlotId: string,
+  options?: {
+    startAtSimTime?: string;  // ⬅ acepta "HH:MM" o segundos
+    priority?: number;
+    dependsOn?: string[];
+  }
+): SimTask {
+  const routeId = getRouteIdForSlot(parkingSlotId);
+
+  if (!routeId) {
+    throw new Error(
+      `[createFollowRouteTaskForTruck] No se encontró ruta para el slot "${parkingSlotId}". ` +
+      `Revisa SLOT_TO_ROUTE_MAP.`
+    );
+  }
+
+  // Generamos un id de tarea simple y único a nivel de frontend
+  const taskId = `followRoute:${truckId}:${parkingSlotId}:${Date.now()}`;
+  
+
+  return createBaseTask({
+    id: taskId,
+    actorId: truckId,
+    actorType,
+    type: 'followRoute',
+    priority: 1,
+    startAtSimTime: options?.startAtSimTime !== undefined ? parseHM(options.startAtSimTime) : undefined, 
+    dependsOn: options?.dependsOn,
+    payload: {
+      routeId,
+    },
+  });
+}
 
 export const ROUTE_SCHEDULE: ScheduledRoute[] = [
   {

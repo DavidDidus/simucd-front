@@ -1,17 +1,12 @@
 import type { ActorType } from '../types/actors';
-import type { ParkingZone, ParkingSlot } from '../types/parkingSlot';
+import type { ParkingZone } from '../types/parkingSlot';
 
-export type ParkingAssignment = {
-  actorId: string;
-  slot: ParkingSlot;
-  zone: ParkingZone;
-};
 
 export function assignParkingSlots(
   actorTypes: { type: ActorType; count: number }[],
   zones: ParkingZone[]
-): Map<string, { x: number; y: number; rotation: number }> {
-  const assignments = new Map<string, { x: number; y: number; rotation: number }>();
+): Map<string, { x: number; y: number; rotation: number;slotId?:string }> {
+  const assignments = new Map<string, { x: number; y: number; rotation: number;slotId?:string }>();
   const zonesState = JSON.parse(JSON.stringify(zones)) as ParkingZone[]; // Deep copy
 
   let actorIndex = 0;
@@ -37,7 +32,8 @@ export function assignParkingSlots(
           assignments.set(actorId, {
             x: availableSlot.x,
             y: availableSlot.y,
-            rotation: availableSlot.rotation
+            rotation: availableSlot.rotation,
+            slotId: availableSlot.id
           });
 
           // Marcar como ocupado
