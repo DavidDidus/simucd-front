@@ -24,6 +24,11 @@ export function useActorStates(
     // 🅿️ Paso 2: Asignar slots automáticamente
     const parkingAssignments = assignParkingSlots(actorTypesData, PARKING_ZONES);
 
+    const craneZone = PARKING_ZONES.find(zone => zone.id === 'zone-parking-crane');
+    const craneSlots = craneZone?.slots ?? [];
+    let craneSlotIndex = 0;
+
+
     // 🎬 Paso 3: Crear estados para cada actor
     const states: ActorState[] = [];
 
@@ -40,7 +45,20 @@ export function useActorStates(
         const actorId = `${actorType}-${i}`;
         
         // 🅿️ Obtener posición asignada automáticamente
-        const assignedPosition = parkingAssignments.get(actorId);
+        let assignedPosition = parkingAssignments.get(actorId);
+
+        if (actorType === 'crane1' && craneSlots.length > 0) {
+          const slot = craneSlots[craneSlotIndex % craneSlots.length];
+          craneSlotIndex += 1;
+
+          // 👇 Asumimos que cada slot tiene { id, position: { x, y, rotation } }
+          assignedPosition = {
+            x: slot.x,
+            y: slot.y,
+            rotation: slot.rotation ?? 0,
+            slotId: slot.id,
+          } as any;
+        }
 
         const state: ActorState = {
           id: actorId,

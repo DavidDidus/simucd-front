@@ -80,6 +80,6 @@ export const ACTOR_DEFINITIONS: Record<ActorType, Omit<ActorConfig, 'count'>> = 
     imagePath: grua_horquilla,
     speed: 1,
     size: { width: 60, height: 80 },
-    behavior: 'mobile' // 🆕 Móvil
+    behavior: 'stationary' 
   },
 };

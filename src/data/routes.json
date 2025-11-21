@@ -884,6 +884,54 @@
     }
   ],
   "priority": 1
+},
+{
+  "id": "route-parking-15-patio",
+  "name": "Parking-15-Patio",
+  "description": "Parking-15-Patio",
+  "points": [
+    {
+      "x": 0.7479289940828402,
+      "y": 0.8143073121079887
+    },
+    {
+      "x": 0.6958579881656805,
+      "y": 0.8143073121079887
+    }
+  ],
+  "priority": 1
+},
+{
+  "id": "route-parking-16-patio",
+  "name": "Parking-16-Patio",
+  "description": "",
+  "points": [
+    {
+      "x": 0.7881656804733728,
+      "y": 0.8095754509092505
+    },
+    {
+      "x": 0.6982248520710059,
+      "y": 0.8079981638430045
+    }
+  ],
+  "priority": 1
+},
+{
+  "id": "route-parking-17-patio",
+  "name": "Parking-17-Patio",
+  "description": "Parking-17-Patio",
+  "points": [
+    {
+      "x": 0.7479289940828402,
+      "y": 0.7859161449155597
+    },
+    {
+      "x": 0.714792899408284,
+      "y": 0.7859161449155597
+    }
+  ],
+  "priority": 1
 }
   ]
 }

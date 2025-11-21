@@ -1,7 +1,7 @@
 // Tipos básicos para el sistema de tareas de simulación
 
 // Tipo de estado de la tarea
-export type SimTaskStatus = 'pending' | 'running' | 'completed' | 'cancelled';
+export type SimTaskStatus = 'pending' | 'running' | 'completed' | 'cancelled' | 'waiting-load-slot';
 
 // Tipo de tarea (podemos extender con más strings específicos)
 export type SimTaskType = 'followRoute' | 'moveToPoint' | 'wait' | string;

@@ -36,6 +36,9 @@ export const SLOT_TO_ROUTE_MAP: Record<string, string> = {
   'slot-12': 'route-parking-12-patio',
   'slot-13': 'route-parking-13-patio',
   'slot-14': 'route-parking-14-patio',
+  'slot-15': 'route-parking-15-patio',
+  'slot-16': 'route-parking-16-patio',
+  'slot-17': 'route-parking-17-patio',
 };
 
 /**
@@ -65,7 +68,7 @@ export function createFollowRouteTaskForTruck(
   actorType: string,
   parkingSlotId: string,
   options?: {
-    startAtSimTime?: string;  // ⬅ acepta "HH:MM" o segundos
+    startAtSimTime?: string;  // ⬅ acepta "HH:MM" 
     priority?: number;
     dependsOn?: string[];
   }
@@ -112,20 +115,17 @@ export const ROUTE_SCHEDULE: ScheduledRoute[] = [
   }
 ];
 
-export function timeToSeconds(timeStr: string): number {
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  return hours * 3600 + minutes * 60;
-}
+
 
 export function getActiveScheduledRoute(simTimeSec: number): { route: PredefinedRoute; schedule: ScheduledRoute } {
   const sortedSchedule = [...ROUTE_SCHEDULE].sort((a, b) => 
-    timeToSeconds(a.startTime) - timeToSeconds(b.startTime)
+    parseHM(a.startTime) - parseHM(b.startTime)
   );
 
   let activeSchedule = sortedSchedule[0];
   
   for (const schedule of sortedSchedule) {
-    const routeStartSec = timeToSeconds(schedule.startTime);
+    const routeStartSec = parseHM(schedule.startTime);
     if (simTimeSec >= routeStartSec) {
       activeSchedule = schedule;
     }
