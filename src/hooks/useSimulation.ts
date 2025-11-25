@@ -44,7 +44,7 @@ export function useSimulation() {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${api}/api/simulate`, {
+      const response = await axios.post(`http://localhost:8000/simulate`, {
         "Cajas facturadas": params.cajasFacturadas,
         "Cajas piqueadas": params.cajasPiqueadas,
         "Pickers": night.pickers,
@@ -53,7 +53,7 @@ export function useSimulation() {
         "Parrilleros": night.consolidadores,
         "Camiones": night.camiones,
         "shifts_day": {
-          "turno_A": {
+          "turno_A": {  
             "Pickers": dayA.pickers,
             "Grueros": dayA.grueros,
             "Chequeadores": dayA.chequeadores,

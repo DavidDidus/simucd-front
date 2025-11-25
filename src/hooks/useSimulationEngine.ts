@@ -27,6 +27,7 @@ type UseSimulationEngineParams = {
   initialRouteId: string;
   stageWidth: number;
   stageHeight: number;
+  truckIdsFromBackend?: string[];
 };
 
 type UseSimulationEngineResult = {
@@ -46,7 +47,7 @@ type UseSimulationEngineResult = {
 export function useSimulationEngine(
   params: UseSimulationEngineParams
 ): UseSimulationEngineResult {
-  const { running, editing, actorCounts, initialRouteId, stageWidth, stageHeight } = params;
+  const { running, editing, actorCounts, initialRouteId, stageWidth, stageHeight, truckIdsFromBackend } = params;
 
   // 👉 Imágenes + estados de actores
   const { actors, loading: actorsLoading } = useActorImages(actorCounts);
@@ -54,7 +55,8 @@ export function useSimulationEngine(
     actors,
     actorsLoading,
     actorCounts,
-    initialRouteId
+    initialRouteId,
+    truckIdsFromBackend
   );
 
   // Tiempo de simulación

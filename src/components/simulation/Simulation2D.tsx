@@ -1,4 +1,3 @@
-// src/components/simulation/Simulation2D.tsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Stage, Layer } from 'react-konva';
 import SimSidebar from './SimSidebar';
@@ -19,6 +18,7 @@ import { useObstacle } from '../../hooks/useObstacle';
 import { PREDEFINED_OBSTACLES } from '../../utils/routes/obstacles';
 import { aStarPathfinding } from '../../utils/routes/pathfinding';
 import { createFollowRouteTaskForTruck } from '../../utils/routes/scheduledRoutes';
+import { usePallets, type EventoRecurso } from '../../hooks/usePallets';
 import PalletSpawnPointsLayer from './layers/PalletSpawnPointsLayer';
 import ParkingSlotsLayer from './layers/ParkingSlotLayer';
 import SaveObstacleModal from './modals/SaveObstacleModal';
@@ -32,9 +32,16 @@ import { useSimulationEngine } from '../../hooks/useSimulationEngine';
 
 type EditMode = 'route' | 'obstacle';
 
+type BackendResponse = {
+  turno_noche?: { linea_tiempo_recursos?: EventoRecurso[]; [key: string]: any };
+  turno_dia?: { linea_tiempo_recursos?: EventoRecurso[]; [key: string]: any };
+  [key: string]: any;
+};
+
 type Props = {
   running?: boolean;
   resources?: Partial<ShiftResources>;
+  backendResponse?: BackendResponse | null;
 };
 
 const DEFAULT_ROUTE: Point[] = [
@@ -44,9 +51,11 @@ const DEFAULT_ROUTE: Point[] = [
 
 const toUrl = (m: any) => (typeof m === 'string' ? m : m?.src || '');
 
+
 export default function Simulation2D({
   running = true,
   resources: resourcesProp,
+  backendResponse
 }: Props) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const startupTasksCreatedRef = useRef(false);
@@ -102,16 +111,39 @@ export default function Simulation2D({
     }));
   }, [resourcesProp]);
 
-  // Configuración de actores
+  // 🔹 IDs de camiones que vienen del backend para el turno noche
+const truckIdsFromBackend = useMemo(() => {
+  const detalle = backendResponse?.data?.turno_noche?.planificacion_detalle;
+  if (!detalle || !Array.isArray(detalle)) return [];
+
+  const ids = new Set<string>();
+
+  // detalle es algo tipo: [ [1, [ { camion_id, pallets... } ]], [2, [...]] ]
+  detalle.forEach((entry: any) => {
+    const trucksForSlot = entry?.[1];
+    if (Array.isArray(trucksForSlot)) {
+      trucksForSlot.forEach((t: any) => {
+        if (t?.camion_id && typeof t.camion_id === 'string') {
+          ids.add(t.camion_id);
+        }
+      });
+    }
+  });
+
+  return Array.from(ids);
+}, [backendResponse]);
+
+ // Configuración de actores
   const [actorCounts] = useState<Record<ActorType, number>>({
-    truck1: 26,
+    truck1: truckIdsFromBackend.length || 26,
     truck2: 0,
     truck3: 0,
     truck4: 0,
     crane1: 1,
   });
 
-  // 🔥 Engine de simulación (tiempo + actores + tareas + parking)
+
+  // Engine de simulación (tiempo + actores + tareas + parking)
   const {
     simTimeSec,
     speedMult,
@@ -127,7 +159,16 @@ export default function Simulation2D({
     initialRouteId: initialRouteIdRef.current,
     stageWidth: stageDims.w,
     stageHeight: stageDims.h,
+    truckIdsFromBackend,
   });
+
+
+  // 🔹 Hook que genera pallets en temporary-zone según la línea de tiempo
+  const { palletCountsBySlot, pallets } = usePallets({
+    backendResponse,
+    simTimeSec,
+  });
+
 
   // Selección manual de ruta para visualización / edición
   const handleRouteSelect = (routeId: string) => {
@@ -172,13 +213,27 @@ export default function Simulation2D({
   );
 
   // 🧠 Tareas iniciales para camiones en parking (secuencial por dependsOn)
+  // 🧠 Tareas iniciales para camiones en parking (solo IDs del backend)
   useEffect(() => {
     if (startupTasksCreatedRef.current) return;
     if (actorStates.length === 0) return;
 
+    // Conjunto de IDs válidos según backend
+    const backendIdSet = new Set(truckIdsFromBackend);
+    if (backendIdSet.size === 0) return;
+    console.log('[Startup Tasks] truckIdsFromBackend:', truckIdsFromBackend);
+console.log(
+  '[Startup Tasks] actorStates truck1 IDs:',
+  actorStates.filter(a => a.type === 'truck1').map(a => a.id)
+);
+
     const trucksInParking = actorStates.filter(
-      a => a.type === 'truck1' && a.parkingSlotId
+      a =>
+        a.type === 'truck1' &&
+        a.parkingSlotId &&
+        backendIdSet.has(a.id)     // 👈 solo camiones del backend
     );
+    console.log(`[Startup Tasks] Camiones en parking para tareas iniciales: ${trucksInParking.length}`);
 
     if (trucksInParking.length === 0) return;
 
@@ -192,6 +247,7 @@ export default function Simulation2D({
           actor.parkingSlotId!,
           {
             startAtSimTime: '00:00',
+            // lo que ya tenías...
             dependsOn: previousTaskId ? [previousTaskId] : undefined,
           }
         );
@@ -204,7 +260,8 @@ export default function Simulation2D({
     });
 
     startupTasksCreatedRef.current = true;
-  }, [actorStates, addTask]);
+  }, [actorStates, addTask, truckIdsFromBackend]);
+
 
   // Escala dinámica basada en el tamaño del stage
   const actorScale = useMemo(() => {
@@ -272,7 +329,7 @@ export default function Simulation2D({
 
     return safeRoute;
   }
-
+ 
   const mobileActors = actorStates.filter(a => a.behavior === 'mobile');
   const stationaryActors = actorStates.filter(a => a.behavior === 'stationary');
 
@@ -389,16 +446,18 @@ export default function Simulation2D({
               stageWidth={stageDims.w}
               stageHeight={stageDims.h}
               showLabels={editing}
+              showSlots={editing}
             />
 
-            {
+            
             <PalletSpawnPointsLayer
               stageWidth={stageDims.w}
               stageHeight={stageDims.h}
               showLabels={false}
-              showEmptySlots={true}
+              showEmptySlots={false}
+              palletsCountsBySlot={palletCountsBySlot}
             />
-            }
+            
 
             <Layer>
               {actorStates.map(actor => {
@@ -481,88 +540,12 @@ export default function Simulation2D({
           maxWidth: 280,
         }}
       >
-        <h4>📍 Estado de Rutas:</h4>
-
-        {actorStates.some(a => a.currentTransition?.isTransitioning) ? (
-          <div
-            style={{
-              background: '#fff3cd',
-              padding: '5px',
-              borderRadius: '4px',
-              marginBottom: '8px',
-            }}
-          >
-            {actorStates
-              .filter(a => a.currentTransition?.isTransitioning)
-              .map(actor => (
-                <div key={actor.id} style={{ marginBottom: '8px' }}>
-                  <div>
-                    <strong>🔄 {actor.id} transicionando...</strong>
-                  </div>
-                  <div style={{ fontSize: '10px' }}>
-                    De: {actor.currentTransition?.fromRoute?.name}
-                  </div>
-                  <div style={{ fontSize: '10px' }}>
-                    A: {actor.currentTransition?.toRoute.name}
-                  </div>
-                  <div style={{ fontSize: '10px' }}>
-                    Progreso:{' '}
-                    {Math.round(
-                      (actor.currentTransition?.progress || 0) * 100
-                    )}
-                    %
-                  </div>
-                  <div
-                    style={{
-                      background: '#007bff',
-                      height: '4px',
-                      borderRadius: '2px',
-                      marginTop: '4px',
-                      marginBottom: '4px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        background: '#28a745',
-                        height: '100%',
-                        width: `${
-                          (actor.currentTransition?.progress || 0) * 100
-                        }%`,
-                        borderRadius: '2px',
-                        transition: 'width 0.1s',
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-          </div>
-        ) : (
-          <div>
-            <strong>Ruta activa:</strong>{' '}
-            {PREDEFINED_ROUTES.find(r => r.id === activeRouteId)?.name ||
-              'N/A'}
-          </div>
-        )}
-
+       
         <div>🚛 Estacionados: {stationaryActors.length}</div>
         <div>🏃 Móviles: {mobileActors.length}</div>
         <hr style={{ margin: '8px 0' }} />
         <div>Hora actual: {formatHM(simTimeSec)}</div>
-        <hr style={{ margin: '8px 0' }} />
-        <div>Horarios programados:</div>
-        {scheduleDetails.map(({ schedule, route }) => (
-          <div
-            key={schedule.routeId}
-            style={{
-              fontSize: '10px',
-              opacity: route.id === activeRouteId ? 1 : 0.6,
-              fontWeight: route.id === activeRouteId ? 'bold' : 'normal',
-              padding: '2px 0',
-            }}
-          >
-            {schedule.startTime} - {route.name}
-          </div>
-        ))}
+        
       </div>
     </div>
   );

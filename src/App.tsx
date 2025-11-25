@@ -36,7 +36,7 @@ export default function App() {
 
   const { night, dayA, dayB, getCurrentParams, updateShiftParam } = useShiftParams(params);
   const { editing, bigCardRef, openEditor, collapseEditor } = useCardAnimation();
-  const { normalized, error, loading, showDashboard } = useSimulation();
+  const { normalized, result, error, loading, showDashboard, runSimulation } = useSimulation();
   const [showSim2D, setShowSim2D] = useState(false);
 
   const currentParams = getCurrentParams(shiftInput);
@@ -156,7 +156,7 @@ function handleRunSimulation() {
     }
 
     setValidationError(null);
-    //runSimulation(params, night, dayA, dayB);
+    runSimulation(params, night, dayA, dayB);
     
     
   }
@@ -205,7 +205,11 @@ function handleRunSimulation() {
 
         {showSim2D && (
         <div style={{ marginTop: 12 }}>
-          <Simulation2D running resources={{ noche: 4, turnoA: 2, turnoB: 0 }} />
+          <Simulation2D 
+          running 
+          resources={{ noche: 4, turnoA: 2, turnoB: 0 }}
+          backendResponse={result}
+          />
         </div>
       )}
 

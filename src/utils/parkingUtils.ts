@@ -113,7 +113,8 @@ export function releaseSlot(slotId: string): void {
 }
 export function assignParkingSlots(
   actorTypes: { type: ActorType; count: number }[],
-  zones: ParkingZone[]
+  zones: ParkingZone[],
+  actorIdsByType?: Record<ActorType, string[]>
 ): Map<string, { x: number; y: number; rotation: number;slotId?:string }> {
   const assignments = new Map<string, { x: number; y: number; rotation: number;slotId?:string }>();
   const zonesState = JSON.parse(JSON.stringify(zones)) as ParkingZone[]; // Deep copy
@@ -121,8 +122,10 @@ export function assignParkingSlots(
   let actorIndex = 0;
 
   for (const { type, count } of actorTypes) {
+    const idsForType = actorIdsByType?.[type] ?? [];
+
     for (let i = 0; i < count; i++) {
-      const actorId = `${type}-${i}`;
+      const actorId = idsForType[i] ?? `${type}-${i}`;
       
       // 🔍 Buscar un slot disponible para este tipo de actor
       let assigned = false;

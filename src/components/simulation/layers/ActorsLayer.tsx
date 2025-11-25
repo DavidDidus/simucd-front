@@ -41,7 +41,7 @@ if (actor.behavior === 'stationary' && actor.parkingPosition) {
         scaleY={scaleY}
         rotation={actor.parkingPosition.rotation || 0}
         listening={false}
-        opacity={0.85}
+        opacity={1}
       />
     );
   }

@@ -6,9 +6,10 @@ type Props = {
   stageWidth: number;
   stageHeight: number;
   showLabels?: boolean;
+  showSlots?: boolean; // 🆕 Controla si mostrar todos los slots
 };
 
-export default function ParkingSlotsLayer({ stageWidth, stageHeight, showLabels = true }: Props) {
+export default function ParkingSlotsLayer({ stageWidth, stageHeight, showLabels = true, showSlots = true }: Props) {
   return (
     <Layer>
       {PARKING_ZONES.map(zone => (
@@ -20,36 +21,38 @@ export default function ParkingSlotsLayer({ stageWidth, stageHeight, showLabels 
           return (
             <React.Fragment key={slot.id}>
               {/* 🟢/🔴 Indicador de slot */}
-              <Circle
-                x={x}
-                y={y}
-                radius={8}
-                fill={isOccupied ? 'red' : 'green'}
-                opacity={0.5}
-              />
-              
-              {/* 📐 Línea de dirección */}
-              <Line
-                points={[
-                  x,
-                  y,
-                  x + Math.cos((slot.rotation * Math.PI) / 180) * 30,
-                  y + Math.sin((slot.rotation * Math.PI) / 180) * 30,
-                ]}
-                stroke={isOccupied ? 'red' : 'green'}
-                strokeWidth={2}
-                opacity={0.5}
-              />
+              {showSlots && (
+                <>
+                  <Circle
+                    x={x}
+                    y={y}
+                    radius={8}
+                    fill={isOccupied ? 'red' : 'green'}
+                    opacity={0.5}
+                  />
+                  
+                  <Line
+                    points={[
+                      x,
+                      y,
+                      x + Math.cos((slot.rotation * Math.PI) / 180) * 30,
+                      y + Math.sin((slot.rotation * Math.PI) / 180) * 30,
+                    ]}
+                    stroke={isOccupied ? 'red' : 'green'}
+                    strokeWidth={2}
+                    opacity={0.5}
+                  />
 
-              {/* 🏷️ Etiqueta */}
-              {showLabels && (
-                <Text
-                  x={x - 20}
-                  y={y - 25}
-                  text={slot.id}
-                  fontSize={10}
-                  fill="black"
-                />
+                  {showLabels && (
+                    <Text
+                      x={x - 20}
+                      y={y - 25}
+                      text={slot.id}
+                      fontSize={10}
+                      fill="black"
+                    />
+                  )}
+                </>
               )}
             </React.Fragment>
           );
