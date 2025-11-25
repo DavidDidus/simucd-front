@@ -8,6 +8,7 @@ export interface ParkingSlot {
   y: number;
   rotation?: number;
   occupied: boolean;
+  assignedTo?: string;
 }
 
 /**
@@ -114,62 +115,67 @@ export function releaseSlot(slotId: string): void {
 export function assignParkingSlots(
   actorTypes: { type: ActorType; count: number }[],
   zones: ParkingZone[],
-  actorIdsByType?: Record<ActorType, string[]>
-): Map<string, { x: number; y: number; rotation: number;slotId?:string }> {
-  const assignments = new Map<string, { x: number; y: number; rotation: number;slotId?:string }>();
-  const zonesState = JSON.parse(JSON.stringify(zones)) as ParkingZone[]; // Deep copy
+  actorIdsByType: Record<ActorType, string[]>
+): Map<string, { x: number; y: number; rotation: number; slotId?: string }> {
+  const assignments = new Map<string, { x: number; y: number; rotation: number; slotId?: string }>();
 
-  let actorIndex = 0;
+  // Copia local, NO tocamos PARKING_ZONES global aquí
+  const zonesState: ParkingZone[] = zones.map(zone => ({
+    ...zone,
+    slots: zone.slots.map(slot => ({ ...slot }))
+  }));
 
   for (const { type, count } of actorTypes) {
-    const idsForType = actorIdsByType?.[type] ?? [];
+    // 1️⃣ Sacamos los IDs para este tipo
+    const idsFromCaller = actorIdsByType[type] ?? [];
 
-    for (let i = 0; i < count; i++) {
-      const actorId = idsForType[i] ?? `${type}-${i}`;
-      
-      // 🔍 Buscar un slot disponible para este tipo de actor
+    // Si no hay IDs definidos para este tipo, generamos tantos como "count"
+    const idsForType =
+      idsFromCaller.length > 0
+        ? idsFromCaller
+        : Array.from({ length: count }, (_, i) => `${type}-${i}`);
+
+    for (const actorId of idsForType) {
       let assigned = false;
 
+      // 2️⃣ Buscamos un slot válido para este actor
       for (const zone of zonesState) {
-        // Verificar si esta zona permite este tipo de actor
+        // Saltar zona de carga
+        if (zone.id === 'zone-load') continue;
+
+        // Verificar allowedTypes si existe
         if (zone.allowedTypes && !zone.allowedTypes.includes(type)) {
           continue;
         }
 
-        // Buscar primer slot disponible en esta zona
         const availableSlot = zone.slots.find(slot => !slot.occupied);
-        
-        if (availableSlot) {
-          // Asignar slot
-          assignments.set(actorId, {
-            x: availableSlot.x,
-            y: availableSlot.y,
-            rotation: availableSlot.rotation,
-            slotId: availableSlot.id
-          });
+        if (!availableSlot) continue;
 
-          // Marcar como ocupado
-          availableSlot.occupied = true;
-          occupySlot(availableSlot.id);
-          availableSlot.assignedTo = actorId;
-          
-          assigned = true;
-          console.log(`✅ ${actorId} asignado a ${availableSlot.id} en ${zone.name}`);
-          break;
-        }
+        assignments.set(actorId, {
+          x: availableSlot.x,
+          y: availableSlot.y,
+          rotation: availableSlot.rotation ?? 0,
+          slotId: availableSlot.id
+        });
+
+        // Marcar ocupado SOLO en la copia local
+        availableSlot.occupied = true;
+        availableSlot.assignedTo = actorId;
+
+        assigned = true;
+        console.log(`✅ ${actorId} asignado a ${availableSlot.id} en ${zone.name}`);
+        break;
       }
 
+      // 3️⃣ Si no hay slots disponibles, posición por defecto
       if (!assigned) {
         console.warn(`⚠️ No hay slots disponibles para ${actorId}`);
-        // Posición por defecto si no hay slots
         assignments.set(actorId, {
-          x: 0.5 + (actorIndex * 0.1),
+          x: 0.5,
           y: 0.5,
           rotation: 0
         });
       }
-
-      actorIndex++;
     }
   }
 

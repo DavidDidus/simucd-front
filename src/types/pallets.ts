@@ -18,6 +18,8 @@ export interface RuntimePallet {
   camionAsignado?: string | null;
 }
 
+
+
 // Puntos predefinidos donde se visualizan los pallets
 export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
   {

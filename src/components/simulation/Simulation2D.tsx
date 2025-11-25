@@ -134,14 +134,16 @@ const truckIdsFromBackend = useMemo(() => {
 }, [backendResponse]);
 
  // Configuración de actores
-  const [actorCounts] = useState<Record<ActorType, number>>({
-    truck1: truckIdsFromBackend.length || 26,
+ const actorCounts = useMemo<Record<ActorType, number>>(
+  () => ({
+    truck1: truckIdsFromBackend.length || 26, // si hay backend, solo esos IDs
     truck2: 0,
     truck3: 0,
     truck4: 0,
     crane1: 1,
-  });
-
+  }),
+  [truckIdsFromBackend]
+);
 
   // Engine de simulación (tiempo + actores + tareas + parking)
   const {
@@ -212,7 +214,6 @@ const truckIdsFromBackend = useMemo(() => {
     [resources, currentShift]
   );
 
-  // 🧠 Tareas iniciales para camiones en parking (secuencial por dependsOn)
   // 🧠 Tareas iniciales para camiones en parking (solo IDs del backend)
   useEffect(() => {
     if (startupTasksCreatedRef.current) return;
