@@ -169,6 +169,7 @@ const truckIdsFromBackend = useMemo(() => {
   const { palletCountsBySlot, pallets } = usePallets({
     backendResponse,
     simTimeSec,
+    actorStates,
   });
 
 
@@ -465,7 +466,6 @@ console.log(
                 let pathToRender: PathPx;
 
                 if (actor.currentTransition?.isTransitioning) {
-                  // Transición (ej: ruta → slot de carga)
                   pathToRender = buildPathPx(
                     actor.currentTransition.transitionPath,
                     stageDims.w,
@@ -476,7 +476,6 @@ console.log(
                   actor.cursor === 0 &&
                   !actor.currentTransition?.isTransitioning
                 ) {
-                  // Actor estacionado en parking
                   const parkingRoute: Point[] = [
                     { x: actor.parkingPosition.x, y: actor.parkingPosition.y },
                     { x: actor.parkingPosition.x, y: actor.parkingPosition.y },
@@ -487,7 +486,6 @@ console.log(
                     stageDims.h
                   );
                 } else {
-                  // Movimiento normal por ruta
                   const actorRoute = PREDEFINED_ROUTES.find(
                     r => r.id === actor.routeId
                   );

@@ -1,4 +1,4 @@
-import { Layer, Image as KonvaImage } from 'react-konva';
+import { Image as KonvaImage } from 'react-konva';
 import type { PathPx } from '../../../utils/path';
 import { poseAlongPath } from '../../../utils/path';
 import type { ActorState } from '../../../types/actors';

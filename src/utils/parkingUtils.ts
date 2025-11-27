@@ -219,3 +219,14 @@ export function getParkingStats(zones: ParkingZone[]): {
     available: total - occupied
   };
 }
+
+/** Devuelve la load-zone que contiene el slot dado **/
+export function getLoadZoneBySlotId(slotId: string): ParkingZone | null {
+  for (const zone of PARKING_ZONES) {
+    if (zone.id.startsWith("load-zone") &&
+        zone.slots.some(s => s.id === slotId)) {
+      return zone;
+    }
+  }
+  return null;
+}

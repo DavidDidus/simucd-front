@@ -202,9 +202,9 @@ export function useSimulationEngine(
 
                 // Si no hay ningún slot libre en zone-load, NO arrancamos la ruta
                 if (!freeSlotInZoneLoad) {
-                  console.log(
-                    `⛔ No se inicia la ruta "${targetRoute.id}" para el actor ${actor.id}: sin slots libres en zone-load`
-                  );
+                 // console.log(
+                 //   `No se inicia la ruta "${targetRoute.id}" para el actor ${actor.id}: sin slots libres en zone-load`
+                  //);
                   // Dejamos la tarea en 'pending' y el actor quieto
                   return actor;
                 }

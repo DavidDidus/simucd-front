@@ -16,6 +16,7 @@ export interface RuntimePallet {
   createdAtSimSec: number;    // tiempo de simulación
   label: string;
   camionAsignado?: string | null;
+  
 }
 
 
@@ -591,7 +592,7 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
   }
   ,
   {
-    id: 'load-zone-0',
+    id: 'load-zone-10',
     name: 'Zona de carga',
     slots : [
       { id: 'load-10-slot-1', x: 0.485, y: 0.560, cant_pallets: 0 },
