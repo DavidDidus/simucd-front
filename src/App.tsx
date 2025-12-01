@@ -11,6 +11,7 @@ import { useCardAnimation } from "./hooks/useCardAnimation";
 import { useShiftParams } from "./hooks/useShiftParams";
 import { buildUtilization, buildTimeline, getStaffValues } from "./utils/dataUtils";
 import Simulation2D from "./components/simulation/Simulation2D";
+import ProgressBar from "./components/ProgressBar";
 
 const LS_KEY = "simucd-params";
 
@@ -22,6 +23,8 @@ const initial: Params = {
   cajasFacturadas: 0,
   cajasPiqueadas: 0,
   camiones: 20,
+  personal_subestandar: 1,
+  entrada_subestandar: 1,
 };
 
 export default function App() {
@@ -33,11 +36,29 @@ export default function App() {
   const [shiftInput, setShiftInput] = useState<ShiftId>("noche");
   const [activeTab, setActiveTab] = useState<TabId>("diaA");
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [showSim2D, setShowSim2D] = useState(false);
+  const [pressed, setPressed] = useState(false);
 
   const { night, dayA, dayB, getCurrentParams, updateShiftParam } = useShiftParams(params);
   const { editing, bigCardRef, openEditor, collapseEditor } = useCardAnimation();
-  const { normalized, result, error, loading, showDashboard, runSimulation } = useSimulation();
-  const [showSim2D, setShowSim2D] = useState(false);
+
+  const {
+    baseResult,
+    normalized,
+    error,
+    loadingBase,
+    loadingMC,
+    showDashboard,
+    runSimulation,
+    isMonteCarlo,
+    selectedScenario,
+    setSelectedScenario,
+    scenariosInfo,
+  } = useSimulation();
+
+  const [progress, setProgress] = useState(0);
+  const [showProgress, setShowProgress] = useState(false);
+  const [progressLabel, setProgressLabel] = useState<string>("");
 
   const currentParams = getCurrentParams(shiftInput);
 
@@ -54,6 +75,73 @@ export default function App() {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [editing]);
+
+    useEffect(() => {
+    let intervalId: number | undefined;
+    let timeoutId: number | undefined;
+
+    const TOTAL_MC_SECONDS = 360;  // 6 minutos
+    const BASE_SECONDS = 5;        // simulación rápida
+    const MC_START = 5;            // porcentaje exacto donde empieza MonteCarlo
+    const MC_END = 100;
+
+    const loading = loadingBase || loadingMC;
+
+    if (loading) {
+      if (!showProgress) {
+        setShowProgress(true);
+        setProgress(0);
+        setProgressLabel("Preparando simulación...");
+      }
+
+      const startTime = Date.now();
+
+      intervalId = window.setInterval(() => {
+        const now = Date.now();
+        const elapsed = (now - startTime) / 1000;
+
+        setProgress((prev) => {
+          // FASE 1 — Simulación rápida
+          if (loadingBase) {
+            const percent = Math.min( (elapsed / BASE_SECONDS) * MC_START , MC_START );
+            setProgressLabel("Preparando simulación...");
+            return percent;
+          }
+
+          // FASE 2 — Monte Carlo
+          if (loadingMC) {
+            const mcElapsed = elapsed; // elapsed solo desde que loadingMC=true
+            const percent =
+              MC_START + (mcElapsed / TOTAL_MC_SECONDS) * (MC_END - MC_START);
+
+            setProgressLabel("Calculando escenarios (Monte Carlo)…");
+
+            return Math.min(percent, MC_END - 1);
+          }
+
+          return prev;
+        });
+      }, 1000);
+    } 
+    else {
+      // TERMINÓ TODO
+      if (showProgress) {
+        setProgress(100);
+        setProgressLabel("Listo");
+        timeoutId = window.setTimeout(() => {
+          setShowProgress(false);
+          setProgress(0);
+          setProgressLabel("");
+        }, 800);
+      }
+    }
+
+    return () => {
+      if (intervalId) window.clearInterval(intervalId);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [loadingBase, loadingMC]);
+
 
   function set<K extends keyof Params>(key: K, value: number) {
     setParams((p) => ({ ...p, [key]: value }));
@@ -74,7 +162,6 @@ export default function App() {
         ? ["Pickers", "Grueros", "Consol.", "Chequeadores"]
         : ["Grueros", "Consol.", "Chequeadores"],
     values: getStaffValues(activeTab, night, dayA, dayB),
-    
     utilization: buildUtilization(activeTab, recDia, recNoche),
   };
 
@@ -97,10 +184,9 @@ export default function App() {
       : activeTab === "diaA"
       ? "Proyección (Turno A)"
       : "Proyección (Turno B)";
-  
-function validateResources(): string | null {
-    // Validar cajas
 
+  function validateResources(): string | null {
+    // Validar cajas
     if (params.cajasFacturadas < params.cajasPiqueadas) {
       return "Las cajas pickeadas no pueden ser mayores que las facturadas";
     }
@@ -135,32 +221,50 @@ function validateResources(): string | null {
 
     return null;
   }
-  let pressed = false;
-function handleRunSimulation() {
-    
+    const scenarioOrder = ["optimista", "realista", "pesimista"] as const;
+  const scenarioLabel: Record<(typeof scenarioOrder)[number], string> = {
+    optimista: "optimista",
+    realista: "realista",
+    pesimista: "pesimista",
+  };
+
+  function goToPrevScenario() {
+    if (!isMonteCarlo) return;
+    const idx = scenarioOrder.indexOf(selectedScenario as any);
+    const prev =
+      scenarioOrder[(idx - 1 + scenarioOrder.length) % scenarioOrder.length];
+    setSelectedScenario(prev as any);
+  }
+
+  function goToNextScenario() {
+    if (!isMonteCarlo) return;
+    const idx = scenarioOrder.indexOf(selectedScenario as any);
+    const next = scenarioOrder[(idx + 1) % scenarioOrder.length];
+    setSelectedScenario(next as any);
+  }
+
+
+  function handleRunSimulation() {
     const validationMessage = validateResources();
-    
+
     if (validationMessage) {
       setValidationError(validationMessage);
-      
       return;
     }
 
-    if(!pressed){
+    // toggle para mostrar/ocultar la simulación 2D
+    if (!pressed) {
       setShowSim2D(true);
-      pressed = true;
-    }else{
+      setPressed(true);
+    } else {
       console.log("Already pressed");
       setShowSim2D(false);
-      pressed = false;
+      setPressed(false);
     }
 
     setValidationError(null);
     runSimulation(params, night, dayA, dayB);
-    
-    
   }
-
 
   return (
     <div className="page">
@@ -193,23 +297,71 @@ function handleRunSimulation() {
         <button
           className="run-btn"
           onClick={handleRunSimulation}
-          disabled={loading}
+          disabled={loadingBase || loadingMC}
         >
-          {loading ? "Ejecutando..." : "Ejecutar simulación"}
+          {loadingBase
+            ? "Ejecutando simulación..."
+            : loadingMC
+            ? "Calculando escenarios..."
+            : "Ejecutar simulación"}
         </button>
-
         
+        {showProgress && (
+          <ProgressBar value={progress} label={progressLabel} />
+        )}
 
         {validationError && <p className="error">{validationError}</p>}
         {error && <p className="error">{error}</p>}
 
         {showSim2D && (
-        <div style={{ marginTop: 12 }}>
-          <Simulation2D 
-          running 
-          resources={{ noche: 4, turnoA: 2, turnoB: 0 }}
-          backendResponse={result}
-          />
+          <div style={{ marginTop: 12 }}>
+            <Simulation2D
+              running
+              resources={{ noche: night.grueros,
+        turnoA: dayA.grueros,
+        turnoB: dayB.grueros,}}
+              // simulación rápida (1 corrida)
+              backendResponse={baseResult}
+            />
+          </div>
+        )}
+
+        {/* Carrusel de escenario Monte Carlo */}
+        {isMonteCarlo && scenariosInfo && (
+        <div className="scenario-carousel">
+          <button
+            type="button"
+            className="scenario-carousel-arrow left"
+            onClick={goToPrevScenario}
+            disabled={loadingMC}
+          >
+            ‹
+          </button>
+
+          <div className="scenario-carousel-center">
+            <div className="scenario-carousel-title">
+              {scenarioLabel[selectedScenario as "optimista" | "realista" | "pesimista"].charAt(0).toUpperCase() + scenarioLabel[selectedScenario as "optimista" | "realista" | "pesimista"].slice(1)}
+            </div>
+            <div className="scenario-carousel-subtitle">
+              {(() => {
+                const info = scenariosInfo[selectedScenario];
+                const noche = info?.endTimeNoche ?? "N/D";
+                const dia = info?.endTimeDia ?? null;
+                return dia
+                  ? `Noche: ${noche} `
+                  : `Noche: ${noche}`;
+              })()}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="scenario-carousel-arrow right"
+            onClick={goToNextScenario}
+            disabled={loadingMC}
+          >
+            ›
+          </button>
         </div>
       )}
 
