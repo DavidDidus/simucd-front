@@ -8,6 +8,9 @@ import consolidadorImg from "../assets/resources/Consolidador_de_carga .png";
 import chequeadorImg from "../assets/resources/Chequeador.png";
 import camionImg from "../assets/resources/Camion.png";
 
+import personal_subestandar from "../assets/subestandar/Operario_Subestandar.png";
+import entrada_subestandar from "../assets/subestandar/Entrada_subestandar.png";
+
 interface StaffCardsProps {
   shiftInput: ShiftId;
   editing: boolean;
@@ -69,6 +72,25 @@ export function StaffCards({
           />
         </div>
       </QuadCarousel>
+    );
+  }
+  if ( shiftInput === "Subestandar") {
+    return (
+      <div className={`day-cards-container ${editing ? "hide-on-expand" : ""}`}>
+        <ParamCard
+          label="Personal subestandar"
+          value={currentParams.personal_subestandar}
+          onChange={(v) => onUpdate("personal_subestandar", v)}
+          imgSrc={personal_subestandar}
+        />
+        <ParamCard
+          label="Puntos de entrada subestandar"
+          value={currentParams.entrada_subestandar}
+          onChange={(v) => onUpdate("entrada_subestandar", v)}
+          imgSrc={entrada_subestandar}
+        />
+      </div>
+
     );
   }
 

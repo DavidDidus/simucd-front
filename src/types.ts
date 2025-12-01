@@ -6,7 +6,10 @@ export type Params = {
   cajasFacturadas: number;
   cajasPiqueadas: number;
   camiones: number;
+  personal_subestandar: number;
+  entrada_subestandar: number;
 };
+
 
 export type SimResult = {
   capacidadPorHora: number;

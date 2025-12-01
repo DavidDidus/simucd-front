@@ -1,4 +1,4 @@
-export type ShiftId = "noche" | "diaA" | "diaB";
+export type ShiftId = "noche" | "diaA" | "diaB" | "Subestandar";
 
 interface Props {
   value: ShiftId;
@@ -25,6 +25,7 @@ export default function ShiftInputTabs({ value, onChange, className }: Props) {
         <TabBtn id="noche" label="Noche" />
         <TabBtn id="diaA" label="Día — Turno A" />
         <TabBtn id="diaB" label="Día — Turno B" />
+        <TabBtn id="Subestandar" label="Subestandar" />
       </div>
     </div>
   );
