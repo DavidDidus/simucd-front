@@ -1,3 +1,5 @@
+import type { Point } from "../types";
+
 export interface PalletSpawnPoint {
   id: string;
   name: string;
@@ -16,6 +18,18 @@ export interface RuntimePallet {
   createdAtSimSec: number;    // tiempo de simulación
   label: string;
   camionAsignado?: string | null;
+
+  inTransit?: boolean;
+  fromZoneId?: string;
+  fromSlotId?: string;
+  toZoneId?: string;
+  toSlotId?: string;
+  transitStartSimSec?: number;
+  transitEndSimSec?: number;
+  xNorm?: number;
+  yNorm?: number;
+
+  pathNorm?: Point[]; // camino pre-calculado
   
 }
 
@@ -309,24 +323,24 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
     name: 'Pasillo 14',
     slots: [
         { id: 'c14-slot-1', x: 0.813, y: 0.1, cant_pallets: 0 },
-        { id: 'c14-slot-2', x: 0.838, y: 0.1, cant_pallets: 0 },
-        { id: 'c14-slot-3', x: 0.838, y: 0.130, cant_pallets: 0 },
-        { id: 'c14-slot-4', x: 0.838, y: 0.160, cant_pallets: 0 },
-        { id: 'c14-slot-5', x: 0.838, y: 0.190, cant_pallets: 0 },
-        { id: 'c14-slot-6', x: 0.838, y: 0.220, cant_pallets: 0 },
-        { id: 'c14-slot-7', x: 0.838, y: 0.250, cant_pallets: 0 },
-        { id: 'c14-slot-8', x: 0.838, y: 0.280, cant_pallets: 0 },
-        { id: 'c14-slot-9', x: 0.838, y: 0.310, cant_pallets: 0 },
-        { id: 'c14-slot-10', x: 0.838, y: 0.340, cant_pallets: 0 },
-        { id: 'c14-slot-11', x: 0.858, y: 0.1, cant_pallets: 0 },
-        { id: 'c14-slot-12', x: 0.858, y: 0.130, cant_pallets: 0 },
-        { id: 'c14-slot-13', x: 0.858, y: 0.160, cant_pallets: 0 },
-        { id: 'c14-slot-14', x: 0.858, y: 0.190, cant_pallets: 0 },
-        { id: 'c14-slot-15', x: 0.858, y: 0.220, cant_pallets: 0 },
-        { id: 'c14-slot-16', x: 0.858, y: 0.250, cant_pallets: 0 },
-        { id: 'c14-slot-17', x: 0.858, y: 0.280, cant_pallets: 0 },
-        { id: 'c14-slot-18', x: 0.858, y: 0.310, cant_pallets: 0 },
-        { id: 'c14-slot-19', x: 0.858, y: 0.340, cant_pallets: 0 },
+        { id: 'c14-slot-2', x: 0.838, y: 0.1, cant_pallets: 10 },
+        { id: 'c14-slot-3', x: 0.838, y: 0.130, cant_pallets: 10 },
+        { id: 'c14-slot-4', x: 0.838, y: 0.160, cant_pallets: 10 },
+        { id: 'c14-slot-5', x: 0.838, y: 0.190, cant_pallets: 10 },
+        { id: 'c14-slot-6', x: 0.838, y: 0.220, cant_pallets: 10 },
+        { id: 'c14-slot-7', x: 0.838, y: 0.250, cant_pallets: 10 },
+        { id: 'c14-slot-8', x: 0.838, y: 0.280, cant_pallets: 10 },
+        { id: 'c14-slot-9', x: 0.838, y: 0.310, cant_pallets: 10 },
+        { id: 'c14-slot-10', x: 0.838, y: 0.340, cant_pallets: 10 },
+        { id: 'c14-slot-11', x: 0.858, y: 0.1, cant_pallets: 10 },
+        { id: 'c14-slot-12', x: 0.858, y: 0.130, cant_pallets: 10 },
+        { id: 'c14-slot-13', x: 0.858, y: 0.160, cant_pallets: 10 },
+        { id: 'c14-slot-14', x: 0.858, y: 0.190, cant_pallets: 10 },
+        { id: 'c14-slot-15', x: 0.858, y: 0.220, cant_pallets: 10 },
+        { id: 'c14-slot-16', x: 0.858, y: 0.250, cant_pallets: 10 },
+        { id: 'c14-slot-17', x: 0.858, y: 0.280, cant_pallets: 10 },
+        { id: 'c14-slot-18', x: 0.858, y: 0.310, cant_pallets: 10 },
+        { id: 'c14-slot-19', x: 0.858, y: 0.340, cant_pallets: 10 },
     ], 
     zone: "completo" 
   },{

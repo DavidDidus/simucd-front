@@ -3,6 +3,9 @@ import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { PALLET_SPAWN_POINTS } from '../types/pallets';
 import type { ActorState } from '../types/actors';
 import type { RuntimePallet } from '../types/pallets';
+import { aStarPathfinding } from '../utils/routes/pathfinding';
+import { PREDEFINED_OBSTACLES } from '../utils/routes/obstacles';
+import type { Point } from '../types';
 
 export type EventoRecurso = {
   recurso: string;
@@ -13,6 +16,7 @@ export type EventoRecurso = {
   label: string;
   operacion: string;
 };
+
 
 // Estructuras mínimas para leer planificacion_detalle del backend
 type PalletPlan = {
@@ -55,6 +59,8 @@ type UsePalletsArgs = {
   backendResponse?: BackendResponseMaybeAxios | null;
   simTimeSec: number;
   actorStates?: ActorState[] | null;
+  craneTransitOverrides?: Record<string, { startSec: number; endSec: number }>;
+  
 };
 
 // Construye mapa palletId -> camion_id usando planificacion_detalle
@@ -108,7 +114,7 @@ function findLoadZoneForCamion(
   return `load-zone-${index}`; // "load-zone-1"
 }
 
-export function usePallets({ backendResponse, simTimeSec, actorStates }: UsePalletsArgs) {
+export function usePallets({ backendResponse, simTimeSec, actorStates,craneTransitOverrides }: UsePalletsArgs) {
   const [pallets, setPallets] = useState<RuntimePallet[]>([]);
   const palletsRef = useRef<RuntimePallet[]>([]);
 
@@ -122,6 +128,9 @@ export function usePallets({ backendResponse, simTimeSec, actorStates }: UsePall
 
   // Para no disparar el mismo evento de grúa dos veces
   const firedCraneEventsRef = useRef<Set<string>>(new Set());
+  // Para saber qué eventos de grúa ya iniciaron el movimiento
+  const startedCraneEventsRef = useRef<Set<string>>(new Set());
+
 
   // 1) Normalizar datos del backend (SOLO turno_noche por ahora)
   const { lineaTiempoRecursos, palletToCamionMap } = useMemo(() => {
@@ -197,7 +206,9 @@ export function usePallets({ backendResponse, simTimeSec, actorStates }: UsePall
     palletId: string;
     // camionId inicial según planificación (fallback)
     camionId: string | null;
-    fireAtSec: number;
+    startAtSec: number; // cuando empieza a moverlo
+    endAtSec: number;   // cuando debería haber llegado
+    
   };
 
   const cranePalletEvents = useMemo<CranePalletEvent[]>(() => {
@@ -216,20 +227,21 @@ export function usePallets({ backendResponse, simTimeSec, actorStates }: UsePall
 
         const camionId = palletToCamionMap[palletId] ?? null;
 
-        // Usamos hora_comienzo + duracion_min (consistente con picker)
-        const fireAtSec =
-          hmToSeconds(e.hora_comienzo) + e.duracion_min * 60;
+        // ⬇️ Antes solo usabas hora_comienzo + duracion_min
+        const startAtSec = hmToSeconds(e.hora_comienzo);
+        const endAtSec = startAtSec + e.duracion_min * 60;
 
         return {
           id: `crane-${e.id_recurso}-${e.hora_comienzo}-${palletId}`,
           palletId,
           camionId,
-          fireAtSec,
+          startAtSec,
+          endAtSec,
         };
       });
 
-    // orden temporal
-    events.sort((a, b) => a.fireAtSec - b.fireAtSec);
+    // orden temporal (por inicio)
+    events.sort((a, b) => a.startAtSec - b.startAtSec);
     console.log('[usePallets] cranePalletEvents:', events);
     return events;
   }, [lineaTiempoRecursos, palletToCamionMap]);
@@ -302,98 +314,199 @@ export function usePallets({ backendResponse, simTimeSec, actorStates }: UsePall
   // - Se dispara cuando simTimeSec >= fireAtSec
   // - Reintenta mientras no encuentre loadZoneId
   // - Usa el camionAsignado del pallet runtime si existe
+  // 5) Efecto: mover pallets según eventos de grúa, SIN teletransporte
   useEffect(() => {
-  if (!cranePalletEvents.length) return;
+    if (!cranePalletEvents.length) return;
 
-  cranePalletEvents.forEach((ev) => {
-    // ya procesado
-    if (firedCraneEventsRef.current.has(ev.id)) return;
-    // aún no llega su tiempo
-    if (simTimeSec < ev.fireAtSec) return;
+    cranePalletEvents.forEach((ev) => {
+      // ya finalizado
+      if (firedCraneEventsRef.current.has(ev.id)) return;
 
-    // 1) mirar si el pallet YA existe en el estado actual
-    const runtimePallet = palletsRef.current.find(
-      (p) => p.id === ev.palletId
-    );
-    if (!runtimePallet) {
-      // el picker aún no lo spawnea, no hacemos setPallets
-      return;
-    }
+      // todavía no empieza el evento de grúa
+      if (simTimeSec < ev.startAtSec) return;
 
-    // 2) resolver camionId: runtime -> planificación
-    const camionId =
-      runtimePallet.camionAsignado ?? ev.camionId ?? null;
-    if (!camionId) {
-      // sin camión todavía, se reintenta en el próximo tick
-      return;
-    }
-
-    // 3) ver si el camión ya está en un slot-load-X
-    const loadZoneId = findLoadZoneForCamion(camionId, actorStates);
-    if (!loadZoneId) {
-      // camión todavía no estacionado, se reintenta luego
-      return;
-    }
-
-    const zone = PALLET_SPAWN_POINTS.find((z) => z.id === loadZoneId);
-    if (!zone || !zone.slots || zone.slots.length === 0) {
-      console.warn(
-        `[usePallets] No se encontró zona de carga "${loadZoneId}" para evento de grúa ${ev.id}`
+      // 1) mirar si el pallet YA existe en el estado actual
+      const runtimePallet = palletsRef.current.find(
+        (p) => p.id === ev.palletId
       );
-      // este evento ya no tiene sentido
-      firedCraneEventsRef.current.add(ev.id);
-      return;
-    }
+      if (!runtimePallet) {
+        // el picker aún no lo spawnea, no hacemos nada
+        return;
+      }
 
-    // 4) ahora sí, movemos el pallet UNA sola vez
-    setPallets((prev) => {
-      const idx = prev.findIndex((p) => p.id === ev.palletId);
-      if (idx === -1) return prev; // por si cambió entre medio
+      // 2) resolver camionId: runtime -> planificación
+      const camionId =
+        runtimePallet.camionAsignado ?? ev.camionId ?? null;
+      if (!camionId) {
+        // sin camión todavía, se reintenta en el próximo tick
+        return;
+      }
 
-      const occupiedSlotIds = new Set(
-        prev.filter((p) => p.zoneId === zone.id).map((p) => p.slotId)
-      );
-      const emptySlots = zone.slots.filter(
-        (slot) => !occupiedSlotIds.has(slot.id)
-      );
-      const candidateSlots =
-        emptySlots.length > 0 ? emptySlots : zone.slots;
+      // 3) ver si el camión ya está en un slot-load-X
+      const loadZoneId = findLoadZoneForCamion(camionId, actorStates);
+      if (!loadZoneId) {
+        // camión todavía no estacionado, se reintenta luego
+        return;
+      }
 
-      const chosenSlot =
-        candidateSlots[
-          Math.floor(Math.random() * candidateSlots.length)
-        ];
+      const zone = PALLET_SPAWN_POINTS.find((z) => z.id === loadZoneId);
+      if (!zone || !zone.slots || zone.slots.length === 0) {
+        console.warn(
+          `[usePallets] No se encontró zona de carga "${loadZoneId}" para evento de grúa ${ev.id}`
+        );
+        // este evento ya no tiene sentido
+        firedCraneEventsRef.current.add(ev.id);
+        return;
+      }
 
-      const updated = [...prev];
-      updated[idx] = {
-        ...updated[idx],
-        zoneId: zone.id,
-        slotId: chosenSlot.id,
-      };
+      // 3.a) Si aún NO iniciamos el movimiento, fijamos origen/destino y marcamos inTransit
+      if (!startedCraneEventsRef.current.has(ev.id)) {
+        setPallets((prev) => {
+          const idx = prev.findIndex((p) => p.id === ev.palletId);
+          if (idx === -1) return prev;
 
-      console.log(
-        `[usePallets] Moviendo pallet ${ev.palletId} a ${zone.id} / ${chosenSlot.id} (camión ${camionId})`
-      );
+          const current = prev[idx];
 
-      return updated;
+          // slots ocupados SOLO por pallets ya estacionados (no en tránsito)
+          const occupiedSlotIds = new Set(
+            prev
+              .filter((p) => p.zoneId === zone.id && !p.inTransit)
+              .map((p) => p.slotId)
+          );
+          const emptySlots = zone.slots.filter(
+            (slot) => !occupiedSlotIds.has(slot.id)
+          );
+          const candidateSlots =
+            emptySlots.length > 0 ? emptySlots : zone.slots;
+
+          const chosenSlot =
+            candidateSlots[
+              Math.floor(Math.random() * candidateSlots.length)
+            ];
+
+          // 🔹 Calcular path A* entre origen y destino del pallet
+          const fromPos = getSlotNormPosition(
+            current.zoneId,
+            current.slotId
+          );
+          const toPos = getSlotNormPosition(
+            zone.id,
+            chosenSlot.id
+          );
+
+          const path = aStarPathfinding(fromPos, toPos, PREDEFINED_OBSTACLES);
+
+          const pathNorm: Point[] =
+            path && path.length > 1 ? path : [fromPos, toPos];
+
+          const updated = [...prev];
+          updated[idx] = {
+            ...current,
+            inTransit: true,
+            fromZoneId: current.zoneId,
+            fromSlotId: current.slotId,
+            toZoneId: zone.id,
+            toSlotId: chosenSlot.id,
+            transitStartSimSec: ev.startAtSec,
+            transitEndSimSec: ev.endAtSec,
+            // 🔹 guardamos la ruta A* que el pallet DEBE seguir
+            pathNorm,
+          };
+
+          console.log(
+            `[usePallets] Iniciando movimiento de pallet ${ev.palletId} de ${current.zoneId}/${current.slotId} a ${zone.id}/${chosenSlot.id} (camión ${camionId}), path A* con ${pathNorm.length} puntos`
+          );
+
+          return updated;
+        });
+
+        startedCraneEventsRef.current.add(ev.id);
+      }
+
+
+      // 3.b) Si ya pasó el final del evento, terminamos el movimiento
+      if (simTimeSec >= ev.endAtSec) {
+        setPallets((prev) => {
+          const idx = prev.findIndex((p) => p.id === ev.palletId);
+          if (idx === -1) return prev;
+
+          const current = prev[idx];
+          const finalZoneId = current.toZoneId ?? current.zoneId;
+          const finalSlotId = current.toSlotId ?? current.slotId;
+
+          const updated = [...prev];
+          updated[idx] = {
+            ...current,
+            zoneId: finalZoneId,
+            slotId: finalSlotId,
+            inTransit: false,
+            fromZoneId: undefined,
+            fromSlotId: undefined,
+            toZoneId: undefined,
+            toSlotId: undefined,
+            transitStartSimSec: undefined,
+            transitEndSimSec: undefined,
+          };
+
+          console.log(
+            `[usePallets] Finalizando movimiento de pallet ${ev.palletId} en ${finalZoneId}/${finalSlotId} (camión ${camionId})`
+          );
+
+          return updated;
+        });
+
+        firedCraneEventsRef.current.add(ev.id);
+      }
     });
-
-    // 5) lo marcamos como disparado
-    firedCraneEventsRef.current.add(ev.id);
-  });
-}, [simTimeSec, cranePalletEvents, actorStates]);
+  }, [simTimeSec, cranePalletEvents, actorStates]);
 
   // 6) Mapa slotId -> cantidad de pallets (para el layer)
-  const palletCountsBySlot = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const p of pallets) {
-      map[p.slotId] = (map[p.slotId] ?? 0) + 1;
-    }
-    return map;
-  }, [pallets]);
+  // Función auxiliar: obtener la posición (normalizada) de un slot
+function getSlotNormPosition(zoneId: string | null | undefined, slotId: string | null | undefined) {
+  if (!zoneId || !slotId) {
+    return { x: 0, y: 0 };
+  }
 
-  return {
-    pallets,
-    palletCountsBySlot,
-  };
+  const zone = PALLET_SPAWN_POINTS.find((z) => z.id === zoneId);
+  const slot = zone?.slots?.find((s) => s.id === slotId);
+
+  if (!slot) {
+    return { x: 0, y: 0 };
+  }
+
+  // Asumo que slot.x y slot.y ya vienen normalizados (0–1)
+  return { x: slot.x, y: slot.y };
+}
+
+// 6) Calcular posición de cada pallet (incluyendo los que están en tránsito)
+const palletsWithPosition = useMemo(() => {
+  return pallets.map((p) => {
+      const { x, y } = getSlotNormPosition(p.zoneId, p.slotId);
+      return { ...p, xNorm: x, yNorm: y };    
+    }
+
+    
+  );
+}, [pallets, simTimeSec, craneTransitOverrides]);
+
+// 7) Mapa slotId -> cantidad de pallets (para el layer de contadores)
+//    Omitimos los pallets que están en tránsito
+const palletCountsBySlot = useMemo(() => {
+  const map: Record<string, number> = {};
+  for (const p of palletsWithPosition) {
+    if (p.inTransit) continue;
+    map[p.slotId] = (map[p.slotId] ?? 0) + 1;
+  }
+  return map;
+}, [palletsWithPosition]);
+
+
+
+
+return {
+  pallets: palletsWithPosition,
+  palletCountsBySlot,
+  
+};
+
 }

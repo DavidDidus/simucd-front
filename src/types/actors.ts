@@ -1,3 +1,4 @@
+
 import grua_horquilla from '../assets/Simulacion/GRUA_HORQUILLA.png';
 import camion_1 from '../assets/Simulacion/T2 VERDE OSCURO.png';
 import type { RouteTransition } from '../utils/routes/scheduledRoutes';

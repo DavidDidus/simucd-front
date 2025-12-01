@@ -26,7 +26,7 @@ export default function SimSidebar({
   selectedRouteId,
   onRouteSelect,
   min = 1,
-  max = 30,
+  max = 100,
   step = 1,
   className,
   style,

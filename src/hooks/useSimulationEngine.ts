@@ -1,4 +1,3 @@
-// src/hooks/useSimulationEngine.ts
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Point } from '../types';
 import type { ActorType, ActorState } from '../types/actors';
@@ -550,4 +549,3 @@ export function useSimulationEngine(
     actorsLoading,
   };
 }
-    
