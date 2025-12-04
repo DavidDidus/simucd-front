@@ -39,6 +39,28 @@ export const SLOT_TO_ROUTE_MAP: Record<string, string> = {
   'slot-15': 'route-parking-15-patio',
   'slot-16': 'route-parking-16-patio',
   'slot-17': 'route-parking-17-patio',
+  'slot-18': 'route-parking-18-patio',
+  'slot-19': 'route-parking-19-patio',
+  'slot-20': 'route-parking-20-patio',
+};
+
+export const LOAD_TO_ROUTE_MAP: Record<string, string> = {
+  'slot-load-1': 'route-patio-1-loading',
+  'slot-load-2': 'route-patio-2-loading',
+  'slot-load-3': 'route-patio-3-loading',
+  'slot-load-4': 'route-patio-4-loading',
+  'slot-load-5': 'route-patio-5-loading',
+  'slot-load-6': 'route-patio-6-loading',
+  'slot-load-7': 'route-patio-7-loading',
+  'slot-load-8': 'route-patio-8-loading',
+  'slot-load-9': 'route-patio-9-loading',
+  'slot-load-10': 'route-patio-10-loading',
+  'slot-load-11': 'route-patio-11-loading',
+  'slot-load-12': 'route-patio-12-loading',
+  'slot-load-13': 'route-patio-13-loading',
+  'slot-load-14': 'route-patio-14-loading',
+  'slot-load-15': 'route-patio-15-loading',
+  'slot-load-16': 'route-patio-16-loading',
 };
 
 /**
@@ -47,6 +69,10 @@ export const SLOT_TO_ROUTE_MAP: Record<string, string> = {
  */
 export function getRouteIdForSlot(slotId: string): string | undefined {
   return SLOT_TO_ROUTE_MAP[slotId];
+}
+
+export function getRouteIdForLoadSlot(loadSlotId: string): string | undefined {
+  return LOAD_TO_ROUTE_MAP[loadSlotId];
 }
 
 /**
@@ -68,7 +94,7 @@ export function createFollowRouteTaskForTruck(
   actorType: string,
   parkingSlotId: string,
   options?: {
-    startAtSimTime?: string;  // ⬅ acepta "HH:MM" 
+    startAtSimTime?: string;
     priority?: number;
     dependsOn?: string[];
   }
@@ -78,27 +104,76 @@ export function createFollowRouteTaskForTruck(
   if (!routeId) {
     throw new Error(
       `[createFollowRouteTaskForTruck] No se encontró ruta para el slot "${parkingSlotId}". ` +
-      `Revisa SLOT_TO_ROUTE_MAP.`
+        `Revisa SLOT_TO_ROUTE_MAP.`
     );
   }
 
-  // Generamos un id de tarea simple y único a nivel de frontend
   const taskId = `followRoute:${truckId}:${parkingSlotId}:${Date.now()}`;
-  
 
   return createBaseTask({
     id: taskId,
     actorId: truckId,
     actorType,
     type: 'followRoute',
-    priority: 1,
-    startAtSimTime: options?.startAtSimTime !== undefined ? parseHM(options.startAtSimTime) : undefined, 
+    priority: options?.priority ?? 1,
+    startAtSimTime:
+      options?.startAtSimTime !== undefined
+        ? parseHM(options.startAtSimTime)
+        : undefined,
     dependsOn: options?.dependsOn,
     payload: {
       routeId,
+      targetZone: 'zone-load',        // 👈 LLEGA A ZONA DE CARGA
     },
   });
 }
+
+/**
+ * 🆕 Tarea para mover camión desde su slot de carga (slot-load-X)
+ * usando LOAD_TO_ROUTE_MAP.
+ * El A* lo sigue manejando el engine igual que cuando va de parking→load.
+ */
+export function createFollowRouteTaskFromLoadSlot(
+  truckId: string,
+  actorType: string,
+  loadSlotId: string,
+  options?: {
+    startAtSimTime?: string;
+    priority?: number;
+    dependsOn?: string[];
+  }
+): SimTask {
+  // 🔹 Usamos DIRECTO el mapa de slots de carga → ruta asociada al slot-load-X
+  const routeId = getRouteIdForLoadSlot(loadSlotId);
+
+  if (!routeId) {
+    throw new Error(
+      `[createFollowRouteTaskFromLoadSlot] No se encontró ruta para el slot de carga "${loadSlotId}". ` +
+        `Revisa LOAD_TO_ROUTE_MAP.`
+    );
+  }
+
+  const taskId = `followRouteFromLoad:${truckId}:${loadSlotId}:${Date.now()}`;
+
+  return createBaseTask({
+    id: taskId,
+    actorId: truckId,
+    actorType,
+    type: 'followRoute',
+    priority: options?.priority ?? 1,
+    startAtSimTime:
+      options?.startAtSimTime !== undefined
+        ? parseHM(options.startAtSimTime)
+        : undefined,
+    dependsOn: options?.dependsOn,
+    payload: {
+      routeId,
+      targetZone: 'zone-parking', // 👈 esta tarea SIEMPRE termina estacionando en zona de parking
+    },
+  });
+}
+
+
 
 export const ROUTE_SCHEDULE: ScheduledRoute[] = [
   {

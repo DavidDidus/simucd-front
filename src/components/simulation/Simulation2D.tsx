@@ -5,7 +5,7 @@ import SaveRouteModal from './modals/SaveRouteModal';
 import BG_IMPORT from '../../assets/Simulacion/PATIO.png';
 import type { Point, ShiftResources } from '../../types';
 import type { PathPx } from '../../utils/path';
-import type { ActorType } from '../../types/actors';
+import type { ActorState, ActorType } from '../../types/actors';
 import { CAN_EDIT } from '../../utils/env';
 import { buildPathPx, toNorm } from '../../utils/path';
 import { formatHM, shiftForSecond, shiftLabel as labelOf , parseHM } from '../../utils/time';
@@ -16,7 +16,7 @@ import { useRoute } from '../../hooks/useRoute';
 import { useObstacle } from '../../hooks/useObstacle';
 import { PREDEFINED_OBSTACLES } from '../../utils/routes/obstacles';
 import { aStarPathfinding } from '../../utils/routes/pathfinding';
-import { createFollowRouteTaskForTruck } from '../../utils/routes/scheduledRoutes';
+import { createFollowRouteTaskForTruck, createFollowRouteTaskFromLoadSlot } from '../../utils/routes/scheduledRoutes';
 import { usePallets, type EventoRecurso } from '../../hooks/usePallets';
 import { PalletsLayer } from './layers/PalletsLayer';
 import PalletSpawnPointsLayer from './layers/PalletSpawnPointsLayer';
@@ -30,6 +30,7 @@ import ActorShape from './layers/ActorsLayer';
 import DevToolbar from './DevToolbar';
 import { useSimulationEngine } from '../../hooks/useSimulationEngine';
 import { PALLET_SPAWN_POINTS } from '../../types/pallets';
+import type { RuntimePallet } from '../../types/pallets';
 
 import grua_horquilla from '../../assets/Simulacion/GRUA_HORQUILLA.png';
 import pallet_icon from '../../assets/Simulacion/PALLET.png'; 
@@ -54,6 +55,19 @@ const DEFAULT_ROUTE: Point[] = [
   { x: 0.06, y: 0.76 },
   { x: 0.94, y: 0.76 },
 ];
+
+type TruckQueueItem = {
+  camionId: string;
+  arrivalSec: number; // hora de ingreso (segundos desde 00:00)
+  order: number;
+};
+
+type SlotLiberadoEvent = {
+  key: string;
+  startAtSec: number; // cuando se libera un slot
+  order: number;
+};
+
 
 const toUrl = (m: any) => (typeof m === 'string' ? m : m?.src || '');
 
@@ -123,9 +137,8 @@ export default function Simulation2D({
   };
 
   const craneMotionsRef = useRef<Map<string, CraneMotion>>(new Map());
+
   const craneHandledEventsRef = useRef<Set<string>>(new Set());
-
-
 
   useEffect(() => {
     if (!CAN_EDIT) setEditing(false);
@@ -145,8 +158,13 @@ export default function Simulation2D({
   const [showPalletSpawnPoints, setShowPalletSpawnPoints] = useState(false);
 
   const craneActorResourceMapRef = useRef<Map<string, number>>(new Map());
+  const firedTruckMoveEventsRef = useRef<Set<string>>(new Set());
 
+  // Ya procesé este evento de slot_liberado
+const processedSlotLiberadoKeysRef = useRef<Set<string>>(new Set());
 
+// Camiones a los que YA les generé una tarea hacia la zona de carga
+const queuedTruckIdsRef = useRef<Set<string>>(new Set());
 
   // Recursos por turno (UI)
   const [resources, setResources] = useState<ShiftResources>({
@@ -164,30 +182,140 @@ export default function Simulation2D({
     }));
   }, [resourcesProp]);
 
-const truckIdsFromBackend = useMemo(() => {
+  const truckQueue = useMemo<TruckQueueItem[]>(() => {
   if (!backendResponse) return [];
 
-  // Igual que en usePallets: soporta { data: { turno_noche }} o { turno_noche } directo
   const root: any = (backendResponse as any).data ?? backendResponse;
-  const detalle = root?.turno_noche?.planificacion_detalle;
+  const linea: EventoRecurso[] | undefined =
+    root?.turno_noche?.linea_tiempo_recursos;
 
-  if (!detalle || !Array.isArray(detalle)) return [];
+  if (!Array.isArray(linea)) return [];
 
-  const ids = new Set<string>();
+  const items: TruckQueueItem[] = [];
+  let order = 0;
 
-  // detalle es algo tipo: [ [1, [ { camion_id, pallets... } ]], [2, [...]] ]
-  detalle.forEach((entry: any) => {
-    const trucksForSlot = entry?.[1];
-    if (Array.isArray(trucksForSlot)) {
-      trucksForSlot.forEach((t: any) => {
-        if (t?.camion_id && typeof t.camion_id === 'string') {
-          ids.add(t.camion_id);
-        }
+  linea.forEach((e: any) => {
+    if (
+      e?.recurso === 'camion_operacion' &&
+      e?.operacion === 'ingreso_camion_operaciones' &&
+      typeof e?.hora_comienzo === 'string'
+    ) {
+      const label = String(e.label ?? '');
+      const match = label.match(/Camión\s+([A-Za-z0-9_-]+)/i);
+      const camionId = match?.[1];
+      if (!camionId) return;
+
+      const arrivalSec = parseHM(e.hora_comienzo);
+
+      items.push({
+        camionId,
+        arrivalSec,
+        order: order++,
       });
     }
   });
 
-  return Array.from(ids);
+  // Ordenamos por hora de ingreso y, en empate, por orden de aparición
+  items.sort((a, b) => {
+    if (a.arrivalSec !== b.arrivalSec) {
+      return a.arrivalSec - b.arrivalSec;
+    }
+    return a.order - b.order;
+  });
+
+  return items;
+}, [backendResponse]);
+
+const slotLiberadoEvents = useMemo<SlotLiberadoEvent[]>(() => {
+  if (!backendResponse) return [];
+
+  const root: any = (backendResponse as any).data ?? backendResponse;
+  const linea: EventoRecurso[] | undefined =
+    root?.turno_noche?.linea_tiempo_recursos;
+
+  if (!Array.isArray(linea)) return [];
+
+  const events: SlotLiberadoEvent[] = [];
+  let order = 0;
+
+  linea.forEach((e: any) => {
+    if (
+      e?.recurso === 'camiones_operacion' &&
+      e?.operacion === 'slot_liberado' &&
+      typeof e?.hora_comienzo === 'string'
+    ) {
+      const startAtSec = parseHM(e.hora_comienzo);
+      const key = `slot-liberado-${e.id_recurso}-${e.hora_comienzo}-${order}`;
+
+      events.push({
+        key,
+        startAtSec,
+        order: order++,
+      });
+    }
+  });
+
+  events.sort((a, b) => {
+    if (a.startAtSec !== b.startAtSec) {
+      return a.startAtSec - b.startAtSec;
+    }
+    return a.order - b.order;
+  });
+
+  return events;
+}, [backendResponse]);
+
+const first16TruckIds = useMemo(
+  () => new Set(truckQueue.slice(0, 16).map(t => t.camionId)),
+  [truckQueue]
+);
+
+// Resto de camiones que van a la cola dinámica
+const queuedTrucksAfter16 = useMemo(
+  () => truckQueue.slice(16),
+  [truckQueue]
+);
+
+
+const truckIdsFromBackend = useMemo(() => {
+  if (!backendResponse) return [];
+
+  // Soporta ambos formatos: { data: { turno_noche }} o { turno_noche } directo
+  const root: any = (backendResponse as any).data ?? backendResponse;
+  const linea: EventoRecurso[] | undefined =
+    root?.turno_noche?.linea_tiempo_recursos;
+
+  if (!Array.isArray(linea)) return [];
+
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  // Recorremos linea_tiempo_recursos en el ORDEN en que viene del backend
+  linea.forEach((e: any) => {
+    let camionId: string | undefined;
+
+    // 2) (Opcional) Evento de "camion_operacion" si lo estás registrando en el backend:
+    //    label tipo: "Camión E44 ingresa a operaciones (slot X)"
+    if (
+      !camionId &&
+      e?.recurso === 'camion_operacion' &&
+      e?.operacion === 'ingreso_camion_operaciones'
+    ) {
+      const label = String(e.label ?? '');
+      const match = label.match(/Camión\s+([A-Za-z0-9_-]+)/i);
+      camionId = match?.[1];
+    }
+
+    if (!camionId) return;
+
+    // Solo agregamos la PRIMERA vez que aparece ese camion_id
+    if (!seen.has(camionId)) {
+      seen.add(camionId);
+      ids.push(camionId);
+    }
+  });
+
+  return ids;
 }, [backendResponse]);
 
 
@@ -232,8 +360,6 @@ const actorCounts = useMemo<Record<ActorType, number>>(
   [truckIdsFromBackend, resources.noche, craneResourceIds]
 );
 
-
-
   // Engine de simulación (tiempo + actores + tareas + parking)
   const {
     simTimeSec,
@@ -262,53 +388,118 @@ const actorCounts = useMemo<Record<ActorType, number>>(
     endAtSec: number;
   };
 
-  // 🔹 Parsear linea_tiempo_recursos para obtener eventos de acomodo por grúa
   const craneMovementEvents = useMemo<CraneMovementEvent[]>(() => {
-    const linea = backendResponse?.turno_noche?.linea_tiempo_recursos;
-    if (!Array.isArray(linea)) return [];
+  const linea = backendResponse?.turno_noche?.linea_tiempo_recursos;
+  if (!Array.isArray(linea)) return [];
 
-    const events: CraneMovementEvent[] = [];
+  const events: CraneMovementEvent[] = [];
 
-    linea
-      .filter(
-        (e: any) =>
-          e?.recurso === 'grua' &&
-          e?.operacion === 'acomodo_pallet' &&
-          typeof e?.hora_comienzo === 'string'
-      )
-      .forEach((e: any) => {
-        const match = String(e.label ?? '').match(
+  linea
+    .filter(
+      (e: any) =>
+        e?.recurso === 'grua' &&
+        (e?.operacion === 'acomodo_pallet' ||
+          e?.operacion === 'despacho_completo' ||
+          e?.operacion === 'carga_pallet') &&        // 👈 NUEVO
+        typeof e?.hora_comienzo === 'string'
+    )
+    .forEach((e: any) => {
+      const label = String(e.label ?? '');
+
+      let palletIdFromLabel: string | undefined;
+
+      if (e.operacion === 'acomodo_pallet') {
+        // "Acomodando pallet MX25"
+        const match = label.match(
           /Acomodando\s+pallet\s+([A-Za-z0-9_-]+)/i
         );
-        const palletIdFromLabel = match?.[1];
+        palletIdFromLabel = match?.[1];
+      } else if (e.operacion === 'despacho_completo') {
+        // "Despachando pallet completo CP18"
+        const match = label.match(
+          /Despachando\s+pallet\s+completo\s+([A-Za-z0-9_-]+)/i
+        );
+        palletIdFromLabel = match?.[1];
+      } else if (e.operacion === 'carga_pallet') {
+        // "Cargando pallet CP17 - Camión E45"
+        const match = label.match(
+          /Cargando\s+pallet\s+([A-Za-z0-9_-]+)/i
+        );
+        palletIdFromLabel = match?.[1];
+      }
 
-        const palletId =
-          palletIdFromLabel ??
-          `pallet-${e.id_recurso}-${e.hora_fin ?? e.hora_comienzo}`;
+      const palletId =
+        palletIdFromLabel ??
+        `pallet-${e.id_recurso}-${e.hora_fin ?? e.hora_comienzo}`;
 
-        const startAtSec = parseHM(e.hora_comienzo);
-        const endAtSec = startAtSec + (e.duracion_min ?? 0) * 60;
+      const startAtSec = parseHM(e.hora_comienzo);
+      const endAtSec = startAtSec + (e.duracion_min ?? 0) * 60;
 
-        const raw = e.id_recurso;
-        const resourceId =
-          typeof raw === 'number' ? raw : parseInt(String(raw), 10);
+      const raw = e.id_recurso;
+      const resourceId =
+        typeof raw === 'number' ? raw : parseInt(String(raw), 10);
 
-        if (Number.isNaN(resourceId)) return;
+      if (Number.isNaN(resourceId)) return;
 
-        const key = `crane-${resourceId}-${e.hora_comienzo}-${palletId}`;
+      const key = `crane-${resourceId}-${e.hora_comienzo}-${palletId}-${e.operacion}`;
 
-        events.push({
-          key,
-          resourceId,
-          palletId,
-          startAtSec,
-          endAtSec,
-        });
+      events.push({
+        key,
+        resourceId,
+        palletId,
+        startAtSec,
+        endAtSec,
       });
+    });
 
-    events.sort((a, b) => a.startAtSec - b.startAtSec);
-    return events;
-  }, [backendResponse, parseHM]);
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+  return events;
+}, [backendResponse, parseHM]);
+
+type TruckMoveEvent = {
+  key: string;
+  camionId: string;
+  startAtSec: number;
+  endAtSec: number;
+};
+
+const truckMoveEvents = useMemo<TruckMoveEvent[]>(() => {
+  const linea = backendResponse?.turno_noche?.linea_tiempo_recursos;
+  if (!Array.isArray(linea)) return [];
+
+  const events: TruckMoveEvent[] = [];
+
+  linea
+    .filter(
+      (e: any) =>
+        e?.recurso === 'patio' &&
+        e?.operacion === 'salida_parking' &&
+        typeof e?.hora_comienzo === 'string'
+    )
+    .forEach((e: any) => {
+      const label = String(e.label ?? '');
+
+      // "Moviendo camión E80"
+      const matchTruck = label.match(/Camión\s+([A-Za-z0-9_-]+)/i);
+      const camionId = matchTruck?.[1];
+      if (!camionId) return;
+
+      const startAtSec = parseHM(e.hora_comienzo);
+      const endAtSec = startAtSec + (e.duracion_min ?? 0) * 60;
+      const key = `move-truck-${camionId}-${e.hora_comienzo}`;
+
+      events.push({
+        key,
+        camionId,
+        startAtSec,
+        endAtSec,
+      });
+    });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+  console.log('[TruckMoveEvents]', events);
+  return events;
+}, [backendResponse, parseHM]);
 
   // 🔹 palletId -> resourceId según la línea de tiempo del backend
 const palletResourceMap = useMemo(() => {
@@ -320,7 +511,6 @@ const palletResourceMap = useMemo(() => {
     }
   });
 
-  console.log('[DEBUG] palletResourceMap:', map);
   return map;
 }, [craneMovementEvents]);
 
@@ -368,32 +558,51 @@ const palletResourceMap = useMemo(() => {
   );
 
   // 🧠 Tareas iniciales para camiones en parking (solo IDs del backend)
+    // 🧠 Tareas iniciales SOLO para los primeros 16 camiones (entran inmediatamente)
   useEffect(() => {
     if (startupTasksCreatedRef.current) return;
     if (actorStates.length === 0) return;
 
-    // Conjunto de IDs válidos según backend
+    // IDs que vienen del backend
     const backendIdSet = new Set(truckIdsFromBackend);
     if (backendIdSet.size === 0) return;
+
     console.log('[Startup Tasks] truckIdsFromBackend:', truckIdsFromBackend);
-console.log(
-  '[Startup Tasks] actorStates truck1 IDs:',
-  actorStates.filter(a => a.type === 'truck1').map(a => a.id)
-);
 
     const trucksInParking = actorStates.filter(
       a =>
         a.type === 'truck1' &&
         a.parkingSlotId &&
-        backendIdSet.has(a.id)     // 👈 solo camiones del backend
+        backendIdSet.has(a.id)
     );
-    console.log(`[Startup Tasks] Camiones en parking para tareas iniciales: ${trucksInParking.length}`);
 
-    if (trucksInParking.length === 0) return;
+    console.log(
+      '[Startup Tasks] actorStates truck1 IDs:',
+      trucksInParking.map(a => a.id)
+    );
+
+    // 👉 Solo los primeros 16 (según cola de tiempo)
+    const immediateTruckIds =
+      first16TruckIds.size > 0
+        ? trucksInParking
+            .filter(a => first16TruckIds.has(a.id))
+            .map(a => a.id)
+        : trucksInParking.map(a => a.id); // fallback, por si no hay datos de ingreso
+
+    const immediateTrucks = trucksInParking.filter(a =>
+      immediateTruckIds.includes(a.id)
+    ).slice(0, 16);
+
+    console.log(
+      `[Startup Tasks] Camiones que entran inmediatamente:`,
+      immediateTrucks.map(a => a.id)
+    );
+
+    if (immediateTrucks.length === 0) return;
 
     let previousTaskId: string | undefined;
 
-    trucksInParking.forEach(actor => {
+    immediateTrucks.forEach(actor => {
       try {
         const task = createFollowRouteTaskForTruck(
           actor.id,
@@ -401,9 +610,9 @@ console.log(
           actor.parkingSlotId!,
           {
             startAtSimTime: '00:00',
-            // lo que ya tenías...
             dependsOn: previousTaskId ? [previousTaskId] : undefined,
           }
+
         );
 
         addTask(task);
@@ -414,9 +623,105 @@ console.log(
     });
 
     startupTasksCreatedRef.current = true;
-  }, [actorStates, addTask, truckIdsFromBackend]);
+  }, [actorStates, addTask, truckIdsFromBackend, first16TruckIds]);
 
-  // 🔹 Mapa palletId -> { startSec, endSec } basado en eventos de grúa
+  useEffect(() => {
+  if (!slotLiberadoEvents.length) return;
+  if (!actorStates.length) return;
+
+  // Para debug
+  // console.log('[TruckQueue] slotLiberadoEvents', slotLiberadoEvents);
+  // console.log('[TruckQueue] queuedTrucksAfter16', queuedTrucksAfter16);
+
+  slotLiberadoEvents.forEach(ev => {
+    // Ya gestioné este evento
+    if (processedSlotLiberadoKeysRef.current.has(ev.key)) {
+      return;
+    }
+
+    // El evento aún no ha ocurrido en el tiempo simulado
+    if (simTimeSec < ev.startAtSec) {
+      return;
+    }
+
+    // 🔎 Buscamos el siguiente camión elegible:
+    //  - Es uno de los "restantes" (no top 16)
+    //  - Su hora de ingreso ya llegó
+    //  - Aún no tiene tarea creada
+    const candidate = queuedTrucksAfter16.find(t => {
+      if (t.arrivalSec > simTimeSec) return false;
+      if (queuedTruckIdsRef.current.has(t.camionId)) return false;
+      return true;
+    });
+
+    if (!candidate) {
+      // No hay camión listo todavía → NO marcamos este slot como procesado.
+      // La próxima vez que corramos el efecto, volveremos a intentar.
+      return;
+    }
+
+    // Buscamos el actor correspondiente en el parking
+    const actor = actorStates.find(
+      a =>
+        (a.type === 'truck1' || a.type === 'truck2') &&
+        a.id === candidate.camionId &&
+        a.parkingSlotId
+    );
+
+    if (!actor) {
+      console.warn(
+        '[TruckQueue] No se encontró actor en parking para camión',
+        candidate.camionId
+      );
+      // Lo marcamos como "ya encolado" para no reintentar eternamente
+      queuedTruckIdsRef.current.add(candidate.camionId);
+      processedSlotLiberadoKeysRef.current.add(ev.key);
+      return;
+    }
+
+    try {
+      // ⏱ Hora efectiva de inicio: max(hora de ingreso, tiempo actual)
+      const startSec = Math.max(simTimeSec, candidate.arrivalSec);
+
+      const task = createFollowRouteTaskForTruck(
+        actor.id,
+        actor.type,
+        actor.parkingSlotId!,
+        {
+          startAtSimTime: formatHM(startSec),
+        }
+      );
+
+      addTask(task);
+      queuedTruckIdsRef.current.add(candidate.camionId);
+      processedSlotLiberadoKeysRef.current.add(ev.key);
+
+      console.log(
+        `[TruckQueue] 🟢 Asignado camión ${candidate.camionId} a slot liberado (${formatHM(
+          ev.startAtSec
+        )}), startAtSimTime=${formatHM(startSec)}`
+      );
+    } catch (error) {
+      console.error(
+        '[TruckQueue] Error creando tarea para camión',
+        candidate.camionId,
+        error
+      );
+      queuedTruckIdsRef.current.add(candidate.camionId);
+      processedSlotLiberadoKeysRef.current.add(ev.key);
+    }
+  });
+}, [
+  slotLiberadoEvents,
+  queuedTrucksAfter16,
+  simTimeSec,
+  actorStates,
+  addTask,
+  formatHM,
+]);
+
+
+    // 🔹 Mapa palletId -> { startSec, endSec } basado en eventos de grúa
   const craneTransitOverrides = useMemo<
     Record<string, { startSec: number; endSec: number }>
   >(() => {
@@ -525,11 +830,6 @@ console.log(
   });
 
   craneActorResourceMapRef.current = map;
-
-  console.log(
-    '[DEBUG] Mapeo grúa(sim) -> id_recurso(back):',
-    Array.from(map.entries())
-  );
 }, [actorStates, craneResourceIds]);
 
 
@@ -552,6 +852,27 @@ console.log(
  
   const mobileActors = actorStates.filter(a => a.behavior === 'mobile');
   const stationaryActors = actorStates.filter(a => a.behavior === 'stationary');
+
+  function getTruckNormPositionForPallet(
+  p: RuntimePallet,
+  actorStates: ActorState[]
+): Point | null {
+  if (!p.dropOnTruck || !p.dropTruckId) return null;
+
+  const actor = actorStates.find(
+    (a) =>
+      (a.type === 'truck1' || a.type === 'truck2') &&
+      a.id === p.dropTruckId &&
+      a.parkingPosition
+  );
+
+  if (!actor || !actor.parkingPosition) return null;
+
+  return {
+    x: actor.parkingPosition.x,
+    y: actor.parkingPosition.y,
+  };
+}
  
 
 const FORKLIFT_ANGLE_OFFSET = 90;
@@ -688,10 +1009,18 @@ useEffect(() => {
         pallet.fromZoneId ?? pallet.zoneId,
         pallet.fromSlotId ?? pallet.slotId
       );
-      const toPos = getSlotNormPosition(
-        pallet.toZoneId ?? pallet.zoneId,
-        pallet.toSlotId ?? pallet.slotId
-      );
+
+      // 👇 Si el pallet es de despacho completo, el destino es el camión
+      const truckTarget =
+        getTruckNormPositionForPallet(pallet as RuntimePallet, actorStates);
+
+      const toPos =
+        truckTarget ??
+        getSlotNormPosition(
+          pallet.toZoneId ?? pallet.zoneId,
+          pallet.toSlotId ?? pallet.slotId
+        );
+
 
       const leg1 = aStarPathfinding(craneStart, fromPos, PREDEFINED_OBSTACLES);
       const leg2 = aStarPathfinding(fromPos, toPos, PREDEFINED_OBSTACLES);
@@ -736,9 +1065,113 @@ useEffect(() => {
 
 }, [simTimeSec, pallets, setActorStates, actorStates.length]);
 
+useEffect(() => {
+  if (!truckMoveEvents.length) return;
+  if (!actorStates.length) return;
 
+  truckMoveEvents.forEach(ev => {
+    // ya procesado
+    if (firedTruckMoveEventsRef.current.has(ev.key)) return;
 
- const palletsStatic = pallets.filter(p => !p.inTransit);
+    // todavía no comienza según la línea de tiempo del backend
+    if (simTimeSec < ev.startAtSec) return;
+
+    // buscar el actor que representa a ese camión
+    const actor = actorStates.find(
+      a =>
+        (a.type === 'truck1' || a.type === 'truck2') &&
+        a.id === ev.camionId
+    );
+
+    if (!actor) {
+      console.warn(
+        '[TruckMove] No se encontró actor para camión',
+        ev.camionId
+      );
+      firedTruckMoveEventsRef.current.add(ev.key);
+      return;
+    }
+
+    const currentSlotId = (actor as any).parkingSlotId as string | undefined;
+    if (!currentSlotId) {
+      console.warn(
+        '[TruckMove] Camión sin parkingSlotId',
+        ev.camionId
+      );
+      firedTruckMoveEventsRef.current.add(ev.key);
+      return;
+    }
+
+    // 📍 Extraemos el índice del slot (sirve tanto para "slot-5" como para "slot-load-5")
+    const match = currentSlotId.match(/(\d+)$/);
+    if (!match) {
+      console.warn(
+        '[TruckMove] parkingSlotId no tiene índice numérico:',
+        currentSlotId,
+        'camión',
+        ev.camionId
+      );
+      firedTruckMoveEventsRef.current.add(ev.key);
+      return;
+    }
+
+    const index = match[1];
+    const loadSlotId = `slot-load-${index}`;
+
+    console.log(
+      `[TruckMove] camión ${ev.camionId} currentSlotId=${currentSlotId} -> loadSlotId=${loadSlotId}`
+    );
+
+        try {
+      const task = createFollowRouteTaskFromLoadSlot(
+        actor.id,
+        actor.type,
+        loadSlotId,
+        {
+          // ⏱ arranca ahora mismo según el reloj de la simulación
+          startAtSimTime: formatHM(simTimeSec),
+        }
+      );
+
+      addTask(task);
+      firedTruckMoveEventsRef.current.add(ev.key);
+
+      // 👇 Forzamos al actor a tomar esta ruta YA
+      const routeId = (task as any).payload?.routeId;
+      if (routeId) {
+        setActorStates(prev =>
+          prev.map(a => {
+            if (a.id !== actor.id) return a;
+
+            return {
+              ...a,
+              routeId,
+              cursor: 0,
+              direction: 1,
+            };
+          })
+        );
+      }
+
+      console.log(
+        `[TruckMove] ✅ Creada tarea followRoute desde ${loadSlotId} para camión ${ev.camionId} a las ${formatHM(
+          simTimeSec
+        )} con routeId=${routeId}`,
+        task
+      );
+    } catch (error) {
+      console.error(
+        '[TruckMove] Error creando tarea de retorno para camión',
+        ev.camionId,
+        'loadSlotId=',
+        loadSlotId,
+        error
+      );
+      firedTruckMoveEventsRef.current.add(ev.key);
+    }
+  });
+}, [truckMoveEvents, simTimeSec, actorStates, addTask, setActorStates]);
+
 
   return (
     <div>
@@ -845,7 +1278,7 @@ useEffect(() => {
               stageWidth={stageDims.w}
               stageHeight={stageDims.h}
               showLabels={editing}
-              showSlots={editing}
+              showSlots={true}
             />
 
             <PalletsLayer

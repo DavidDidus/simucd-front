@@ -18,6 +18,7 @@ export interface SimTaskPayload {
   palletId?: string;
   targetZoneId?: string;
   targetSlotId?: string;
+  targetZone?: string;
 }
 
 // Modelo genérico de tarea de simulación
@@ -89,32 +90,3 @@ export function createBaseTask(params: CreateBaseTaskParams): SimTask {
     createdAtSimTime,
   };
 }
-
-export function createCraneMoveTaskForPallet(params: {
-  id: string;
-  craneActorId: string;   // normalmente 'crane1'
-  palletId: string;
-  targetPoint: { x: number; y: number };   // coords normalizadas del slot destino
-  targetZoneId?: string;
-  targetSlotId?: string;
-  startAtSimTime?: number;                 // segundos de simulación
-  dependsOn?: string[];
-  priority?: number;
-}): SimTask {
-  return createBaseTask({
-    id: params.id,
-    actorId: params.craneActorId,
-    actorType: 'crane1',
-    type: 'craneMoveWithPallet',
-    priority: params.priority ?? 5,
-    startAtSimTime: params.startAtSimTime,
-    dependsOn: params.dependsOn,
-    payload: {
-      targetPoint: params.targetPoint,
-      palletId: params.palletId,
-      targetZoneId: params.targetZoneId,
-      targetSlotId: params.targetSlotId,
-    },
-  });
-}
-

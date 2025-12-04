@@ -39,20 +39,17 @@ function isPointNearObstacles(point: Point, obstacles: PredefinedObstacle[]): bo
 
 // Encontrar el punto más cercano en la ruta que no esté bloqueado
 function findSafeTargetPoint(targetRoute: Point[], obstacles: PredefinedObstacle[]): Point {
-  console.log('🎯 Buscando punto seguro en ruta con', targetRoute.length, 'puntos');
   
   // Buscar el primer punto de la ruta que no esté bloqueado
   for (let i = 0; i < targetRoute.length; i++) {
     const point = targetRoute[i];
     
     if (!isPointNearObstacles(point, obstacles)) {
-      console.log('✅ Punto seguro encontrado en índice:', i);
       return point;
     }
   }
   
   // Si todos los puntos están bloqueados, devolver el primero
-  console.log('⚠️ Todos los puntos están bloqueados, usando el primero');
   return targetRoute[0];
 }
 
@@ -62,12 +59,8 @@ export function findTransitionToRouteStart(
   targetRoute: Point[],
   obstacles: PredefinedObstacle[] = []
 ): Point[] {
-  console.log('🚀 Iniciando transición desde:', currentPoint);
-  console.log('🎯 Hacia ruta con', targetRoute.length, 'puntos');
-  console.log('🚧 Evitando', obstacles.length, 'obstáculos');
   
   if (targetRoute.length === 0) {
-    console.log('❌ Ruta objetivo vacía');
     return [];
   }
   
@@ -76,12 +69,10 @@ export function findTransitionToRouteStart(
   
   // Si no hay obstáculos o estamos muy cerca, ir directamente
   if (obstacles.length === 0 || distance(currentPoint, safeTarget) < 0.02) {
-    console.log('➡️ Transición directa (sin obstáculos o muy cerca)');
     return [currentPoint, safeTarget];
   }
 
   // Si hay obstáculos, usar A* para encontrar un camino seguro
-  console.log('🧠 Usando A* para evitar obstáculos');
   return aStarPathfinding(currentPoint, safeTarget, obstacles);
 }
 
@@ -92,9 +83,6 @@ export function aStarPathfinding(
   obstacles: PredefinedObstacle[] = [],
   maxIterations: number = 5000 // 🔥 Aumentado de 1000 a 5000
 ): Point[] {
-  console.log('🧠 A* iniciado desde:', start, 'hacia:', goal);
-  console.log('🚧 Evitando', obstacles.length, 'obstáculos');
-  console.log('⚙️ Máximo de iteraciones:', maxIterations);
   
   const openList: PathNode[] = [];
   const closedList: PathNode[] = [];
@@ -110,16 +98,10 @@ export function aStarPathfinding(
   openList.push(startNode);
   
   let iterations = 0;
-  const logInterval = 500; // Log cada 500 iteraciones para monitoreo
   
   while (openList.length > 0 && iterations < maxIterations) {
     iterations++;
-    
-    // Log de progreso cada cierto número de iteraciones
-    if (iterations % logInterval === 0) {
-      console.log(`🔄 Iteración ${iterations}/${maxIterations} - Nodos abiertos: ${openList.length}, Nodos cerrados: ${closedList.length}`);
-    }
-    
+        
     // Obtener el nodo con menor f
     const currentNode = getLowestFNode(openList);
     
@@ -131,9 +113,6 @@ export function aStarPathfinding(
     // Si llegamos al objetivo (con tolerancia ajustable)
     const goalTolerance = 0.02;
     if (distance(currentNode.point, goal) < goalTolerance) {
-      console.log('🎉 A* encontró camino en', iterations, 'iteraciones');
-      console.log('📊 Nodos explorados:', closedList.length);
-      console.log('📏 Longitud del camino:', reconstructPath(currentNode).length, 'puntos');
       return reconstructPath(currentNode);
     }
     
@@ -169,25 +148,12 @@ export function aStarPathfinding(
     }
   }
   
-  // 🆕 Mensaje mejorado cuando se alcanza el límite
-  if (iterations >= maxIterations) {
-    console.warn('⚠️ A* alcanzó el límite de', maxIterations, 'iteraciones sin encontrar camino');
-    console.warn('📊 Nodos explorados:', closedList.length);
-    console.warn('📋 Nodos pendientes:', openList.length);
-    console.warn('💡 Sugerencia: Los obstáculos pueden estar bloqueando completamente el camino');
-  } else {
-    console.warn('⚠️ A* no pudo encontrar un camino (lista abierta vacía)');
-  }
-  
   // 🆕 Intentar encontrar el nodo más cercano al objetivo como plan B
   const closestNode = findClosestNodeToGoal(closedList, goal);
   if (closestNode && distance(closestNode.point, goal) < 0.1) {
-    console.log('🔄 Usando camino parcial al nodo más cercano');
     return reconstructPath(closestNode);
   }
   
-  // Si no se encuentra camino, usar transición suave directa
-  console.log('➡️ Fallback: usando transición suave directa');
   return generateSmoothTransition(start, goal);
 }
 
@@ -275,10 +241,6 @@ export function findTransitionPath(
   targetRoute: Point[],
   obstacles: PredefinedObstacle[] = []
 ): Point[] {
-  console.log('🎬 findTransitionPath llamada');
-  console.log('📍 Punto actual:', currentPoint);
-  console.log('🎯 Ruta objetivo:', targetRoute.length, 'puntos');
-  console.log('🚧 Obstáculos:', obstacles.length);
   
   return findTransitionToRouteStart(currentPoint, targetRoute, obstacles);
 }

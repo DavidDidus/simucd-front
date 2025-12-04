@@ -84,25 +84,34 @@ export function useSimulationEngine(
     );
   }, []);
 
-  const getNextTaskForActor = useCallback(
+    const getNextTaskForActor = useCallback(
     (actorId: string, timeSec: number): SimTask | null => {
       const now = timeSec;
+
+      const hasDepsPending = (t: SimTask) => {
+        if (!t.dependsOn || t.dependsOn.length === 0) return false;
+        return t.dependsOn.some(depId => {
+          const depTask = tasks.find(tt => tt.id === depId);
+          if (!depTask) return true;
+          return depTask.status !== 'completed';
+        });
+      };
 
       const candidates = tasks.filter(t => {
         if (t.actorId !== actorId) return false;
         if (t.status !== 'pending') return false;
+        if (hasDepsPending(t)) return false;
 
-        if (typeof t.startAtSimTime === 'number' && t.startAtSimTime > now) {
-          return false;
+        const targetZone = (t as any).payload?.targetZone;
+
+        // 🔹 Para tareas que vuelven a zone-parking, NO bloqueamos por startAtSimTime
+        if (t.type === 'followRoute' && targetZone === 'zone-parking') {
+          return true;
         }
 
-        if (t.dependsOn && t.dependsOn.length > 0) {
-          const depsPending = t.dependsOn.some(depId => {
-            const depTask = tasks.find(tt => tt.id === depId);
-            if (!depTask) return true;
-            return depTask.status !== 'completed';
-          });
-          if (depsPending) return false;
+        // 🔹 Para el resto, respetamos startAtSimTime
+        if (typeof t.startAtSimTime === 'number' && t.startAtSimTime > now) {
+          return false;
         }
 
         return true;
@@ -124,7 +133,8 @@ export function useSimulationEngine(
     [tasks]
   );
 
-  // 👉 Loop principal de simulación (tick)
+    // 👉 Loop principal de simulación (tick)
+   // 👉 Loop principal de simulación (tick)
   useEffect(() => {
     const active =
       running && !editing && !actorsLoading && actorStates.length > 0;
@@ -166,6 +176,22 @@ export function useSimulationEngine(
               t.type === 'followRoute'
           );
 
+          // 🧹 FIX: si el actor está quieto, sin transición, pero tiene tarea running → la damos por completada
+          if (
+            actor.behavior === 'stationary' &&
+            !hasTransition &&
+            hasRunningTask
+          ) {
+            setTasks(prev =>
+              prev.map(t =>
+                t.actorId === actor.id && t.status === 'running'
+                  ? { ...t, status: 'completed' }
+                  : t
+              )
+            );
+            console.log(`🧹 FIX: reseteada tarea atascada para camión ${actor.id}`);
+          }
+
           // 1) Arrancar tarea si no tiene transición ni tarea en curso
           if (!hasTransition && !hasRunningTask) {
             const nextTask = getNextTaskForActor(actor.id, logicalSimTime);
@@ -175,16 +201,26 @@ export function useSimulationEngine(
               nextTask.type === 'followRoute' &&
               nextTask.payload?.routeId
             ) {
+              const targetZone =
+                (nextTask as any).payload?.targetZone ?? 'zone-load';
 
+              // 🆕 Si la tarea es "volver al parking", liberamos el slot de carga
+              if (targetZone === 'zone-parking' && actor.parkingSlotId) {
+                console.log(
+                  `🚛 ${actor.id} saliendo de slot de carga ${actor.parkingSlotId} hacia parking`
+                );
+                releaseSlot(actor.parkingSlotId);
+              }
+
+              // ⏱ Throttle de 1 minuto SOLO para tareas que van a zone-load
               if (
-                  lastZoneLoadArrivalRef.current !== null &&
-                  logicalSimTime < lastZoneLoadArrivalRef.current + 60
-                ) {
-                  // Aún no se cumple el minuto desde que se estacionó el último camión,
-                  // no arrancamos la siguiente ruta en este tick.
-                  return actor;
-                }
-                
+                targetZone === 'zone-load' &&
+                lastZoneLoadArrivalRef.current !== null &&
+                logicalSimTime < lastZoneLoadArrivalRef.current + 60
+              ) {
+                return actor;
+              }
+
               const targetRouteId = nextTask.payload.routeId;
               const targetRoute = PREDEFINED_ROUTES.find(
                 r => r.id === targetRouteId
@@ -194,19 +230,18 @@ export function useSimulationEngine(
                 const routeEnd: Point =
                   targetRoute.points[targetRoute.points.length - 1];
 
-                const freeSlotInZoneLoad = findNearestFreeSlotInZone(
-                  'zone-load',
-                  routeEnd
-                );
-
-                // Si no hay ningún slot libre en zone-load, NO arrancamos la ruta
-                if (!freeSlotInZoneLoad) {
-                 // console.log(
-                 //   `No se inicia la ruta "${targetRoute.id}" para el actor ${actor.id}: sin slots libres en zone-load`
-                  //);
-                  // Dejamos la tarea en 'pending' y el actor quieto
-                  return actor;
+                // Para rutas que terminan en zone-load, verificamos capacidad ANTES de arrancar
+                if (targetZone === 'zone-load') {
+                  const freeSlotInZoneLoad = findNearestFreeSlotInZone(
+                    'zone-load',
+                    routeEnd
+                  );
+                  if (!freeSlotInZoneLoad) {
+                    // No arrancamos la ruta hacia zona de carga si no hay slots libres
+                    return actor;
+                  }
                 }
+
                 let currentPosition: Point;
 
                 if (
@@ -245,12 +280,19 @@ export function useSimulationEngine(
                 );
 
                 if (!transitionPath || transitionPath.length === 0) {
+                  console.warn(
+                    `⚠️ No se pudo construir transición para actor ${actor.id} hacia ruta ${targetRoute.id}`
+                  );
                   return actor;
                 }
 
                 updateTaskStatus(nextTask.id, 'running');
 
-                const transition: RouteTransition = {
+                console.log(
+                  `[Engine] ▶ Arrancando followRoute para ${actor.id} routeId=${targetRouteId} targetZone=${targetZone}`
+                );
+
+                const transition: RouteTransition & { targetZone?: string } = {
                   isTransitioning: true,
                   transitionPath,
                   fromRoute:
@@ -259,6 +301,7 @@ export function useSimulationEngine(
                   toRoute: targetRoute,
                   progress: 0,
                   targetReached: false,
+                  targetZone,
                 };
 
                 return {
@@ -267,116 +310,170 @@ export function useSimulationEngine(
                   currentTransition: transition,
                   cursor: 0,
                   direction: 1,
+                  // 🆕 si va al parking, ya no "pertenece" a un slot-load
+                  parkingSlotId:
+                    targetZone === 'zone-parking'
+                      ? undefined
+                      : actor.parkingSlotId,
                 };
               }
             }
           }
+
 
           // 2) Transición activa
-          if (actor.currentTransition?.isTransitioning) {
-            const transition = actor.currentTransition;
-            const transitionPathPx = buildPathPx(
-              transition.transitionPath,
-              stageWidth,
-              stageHeight
-            );
+if (actor.currentTransition?.isTransitioning) {
+  const transition = actor.currentTransition as RouteTransition & {
+    parkingSlotId?: string;
+    targetZone?: string;
+  };
 
-            if (transitionPathPx.total === 0) {
-              console.warn('⚠️ Path de transición vacío, finalizando transición');
-              return {
-                ...actor,
-                currentTransition: undefined,
-                routeId: transition.toRoute.id,
-                cursor: 0,
-                direction: 1,
-              };
+  const transitionPathPx = buildPathPx(
+    transition.transitionPath,
+    stageWidth,
+    stageHeight
+  );
+
+  if (transitionPathPx.total === 0) {
+    console.warn('⚠️ Path de transición vacío, finalizando transición');
+
+    const parkingSlotId = transition.parkingSlotId;
+    const targetZone = transition.targetZone ?? 'zone-load';
+
+    // 🔹 Caso especial: transición hacia un slot de parking/carga,
+    // pero el path está vacío → “teletransportar” al slot y cerrar la tarea.
+    if (parkingSlotId) {
+      if (actor.parkingSlotId && actor.parkingSlotId !== parkingSlotId) {
+        releaseSlot(actor.parkingSlotId);
+      }
+
+      occupySlot(parkingSlotId);
+      const targetSlot = getSlotById(parkingSlotId);
+
+      if (targetZone === 'zone-load') {
+        lastZoneLoadArrivalRef.current = logicalSimTime;
+      }
+
+      // Marcar followRoute en running como completadas
+      setTasks(prev =>
+        prev.map(t =>
+          t.actorId === actor.id &&
+          t.type === 'followRoute' &&
+          t.status === 'running'
+            ? { ...t, status: 'completed' }
+            : t
+        )
+      );
+
+      return {
+        ...actor,
+        currentTransition: undefined,
+        routeId: transition.toRoute.id,
+        cursor: 0,
+        direction: 0,
+        behavior: 'stationary',
+        parkingSlotId,
+        parkingPosition: targetSlot
+          ? {
+              x: targetSlot.x,
+              y: targetSlot.y,
+              rotation:
+                targetSlot.rotation ??
+                actor.parkingPosition?.rotation ??
+                0,
             }
+          : actor.parkingPosition,
+      };
+    }
 
-            const SPEED = stageWidth * 0.02;
-            let newCursor = actor.cursor + SPEED * dtSim;
+    // 🔹 Si no era una transición hacia slot, dejamos el fallback original
+    return {
+      ...actor,
+      currentTransition: undefined,
+      routeId: transition.toRoute.id,
+      cursor: 0,
+      direction: 1,
+    };
+  }
 
-            if (newCursor >= transitionPathPx.total) {
-              console.log(
-                `✅ Actor ${actor.id}: Transición completada`
-              );
+  // ⬇️ resto de la lógica de transición (SPEED, newCursor, etc) tal cual la tienes
+  const SPEED = stageWidth * 0.02;
+  let newCursor = actor.cursor + SPEED * dtSim;
 
-              const parkingSlotId = (transition as any)
-                .parkingSlotId as string | undefined;
+  if (newCursor >= transitionPathPx.total) {
+    console.log(`✅ Actor ${actor.id}: Transición completada`);
 
-              if (parkingSlotId) {
-                // → Transición a slot de carga
+    const parkingSlotId = transition.parkingSlotId;
+    const targetZone = transition.targetZone ?? 'zone-load';
 
-                if (
-                  actor.parkingSlotId &&
-                  actor.parkingSlotId !== parkingSlotId
-                ) {
-                  releaseSlot(actor.parkingSlotId);
-                }
+    if (parkingSlotId) {
+      if (actor.parkingSlotId && actor.parkingSlotId !== parkingSlotId) {
+        releaseSlot(actor.parkingSlotId);
+      }
 
-                occupySlot(parkingSlotId);
-                const targetSlot = getSlotById(parkingSlotId);
-                
-                lastZoneLoadArrivalRef.current = logicalSimTime;
+      occupySlot(parkingSlotId);
+      const targetSlot = getSlotById(parkingSlotId);
 
-                setTasks(prev =>
-                  prev.map(t =>
-                    t.actorId === actor.id &&
-                    t.type === 'followRoute' &&
-                    t.status === 'running'
-                      ? { ...t, status: 'completed' }
-                      : t
-                  )
-                );
+      if (targetZone === 'zone-load') {
+        lastZoneLoadArrivalRef.current = logicalSimTime;
+      }
 
-                return {
-                  ...actor,
-                  currentTransition: undefined,
-                  routeId: transition.toRoute.id,
-                  cursor: 0,
-                  direction: 0,
-                  behavior: 'stationary',
-                  parkingSlotId,
-                  parkingPosition: targetSlot
-                    ? {
-                        x: targetSlot.x,
-                        y: targetSlot.y,
-                        rotation:
-                          targetSlot.rotation ??
-                          actor.parkingPosition?.rotation ??
-                          0,
-                      }
-                    : actor.parkingPosition,
-                };
-              }
+      setTasks(prev =>
+        prev.map(t =>
+          t.actorId === actor.id &&
+          t.type === 'followRoute' &&
+          t.status === 'running'
+            ? { ...t, status: 'completed' }
+            : t
+        )
+      );
 
-              // Transición normal
-              return {
-                ...actor,
-                currentTransition: undefined,
-                routeId: transition.toRoute.id,
-                cursor: 0,
-                direction: 1,
-              };
+      return {
+        ...actor,
+        currentTransition: undefined,
+        routeId: transition.toRoute.id,
+        cursor: 0,
+        direction: 0,
+        behavior: 'stationary',
+        parkingSlotId,
+        parkingPosition: targetSlot
+          ? {
+              x: targetSlot.x,
+              y: targetSlot.y,
+              rotation:
+                targetSlot.rotation ??
+                actor.parkingPosition?.rotation ??
+                0,
             }
+          : actor.parkingPosition,
+      };
+    }
 
-            // Continúa transición
-            return {
-              ...actor,
-              cursor: newCursor,
-              currentTransition: {
-                ...transition,
-                progress: newCursor / transitionPathPx.total,
-                targetReached:
-                  newCursor > transitionPathPx.total * 0.95,
-              },
-            };
-          }
+    // Transición normal (sin slot asociado)
+    return {
+      ...actor,
+      currentTransition: undefined,
+      routeId: transition.toRoute.id,
+      cursor: 0,
+      direction: 1,
+    };
+  }
+
+  // Continúa transición
+  return {
+    ...actor,
+    cursor: newCursor,
+    currentTransition: {
+      ...transition,
+      progress: newCursor / transitionPathPx.total,
+      targetReached: newCursor > transitionPathPx.total * 0.95,
+    },
+  };
+}
+
 
           // 3) Sin transición, stationary y sin tarea → quieto
-          if (
-            actor.behavior === 'stationary' &&
-            !runningFollowRouteTask
-          ) {
+          if (actor.behavior === 'stationary' && !runningFollowRouteTask) {
             return actor;
           }
 
@@ -397,26 +494,25 @@ export function useSimulationEngine(
             stageHeight
           );
           if (actorPathPx.total === 0) {
-            console.warn(
-              `⚠️ Ruta "${actorRoute.name}" no tiene puntos válidos`
-            );
+            console.warn(`⚠️ Ruta "${actorRoute.name}" no tiene puntos válidos`);
             return actor;
           }
 
           const SPEED = stageWidth * 0.03 * actor.speed;
 
-          // 4.a) followRoute en ejecución → avanzar hasta fin de ruta y de ahí al parking
+          // 4.a) followRoute en ejecución → avanzar hasta fin de ruta y de ahí a un slot
           if (runningFollowRouteTask) {
             const newCursor = actor.cursor + SPEED * dtSim;
 
             if (newCursor >= actorPathPx.total) {
               const routeEnd: Point =
-                actorRoute.points[actorRoute.points.length - 1];  
+                actorRoute.points[actorRoute.points.length - 1];
 
-              const bestSlot = findNearestFreeSlotInZone(
-                'zone-load',
-                routeEnd
-              );
+              const targetZone =
+                (runningFollowRouteTask as any).payload?.targetZone ??
+                'zone-load';
+
+              const bestSlot = findNearestFreeSlotInZone(targetZone, routeEnd);
 
               if (!bestSlot) {
                 setTasks(prev =>
@@ -428,7 +524,7 @@ export function useSimulationEngine(
                 );
 
                 console.log(
-                  `⚠️ Actor ${actor.id}: sin slots libres en zone-load`
+                  `⚠️ Actor ${actor.id}: sin slots libres en ${targetZone}`
                 );
 
                 return {
@@ -454,6 +550,12 @@ export function useSimulationEngine(
                   )
                 );
 
+                console.log(
+  `🚛 [DEBUG] Fin de ruta ${actorRoute.id} para ${actor.id}, targetZone=${targetZone}, routeEnd=`,
+  routeEnd
+);
+console.log('🚛 [DEBUG] bestSlot encontrado:', bestSlot);
+
                 return {
                   ...actor,
                   cursor: actorPathPx.total,
@@ -463,11 +565,12 @@ export function useSimulationEngine(
               }
 
               console.log(
-                `🚛 Actor ${actor.id}: ruta completada, moviéndose a slot de carga ${bestSlot.id}`
+                `🚛 Actor ${actor.id}: ruta completada, moviéndose a slot ${bestSlot.id} en ${targetZone}`
               );
 
               const parkingTransition: RouteTransition & {
                 parkingSlotId?: string;
+                targetZone?: string;
               } = {
                 isTransitioning: true,
                 transitionPath: parkingPath,
@@ -476,6 +579,7 @@ export function useSimulationEngine(
                 progress: 0,
                 targetReached: false,
                 parkingSlotId: bestSlot.id,
+                targetZone,
               };
 
               return {

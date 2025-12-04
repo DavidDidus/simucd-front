@@ -30,6 +30,13 @@ export interface RuntimePallet {
   yNorm?: number;
 
   pathNorm?: Point[]; // camino pre-calculado
+  dropOnTruck?: boolean;
+  dropTruckId?: string | null;
+
+  isBeingChecked?: boolean;          // true mientras dura el evento de chequeo
+  isCheckedOk?: boolean;             // true cuando el chequeo ya terminó
+  lastCheckStartSimSec?: number;     // inicio del último chequeo (si existe)
+  lastCheckEndSimSec?: number;  
   
 }
 
@@ -463,6 +470,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
       { id: 'load-1-slot-8', x: 0.135, y: 0.515, cant_pallets: 0 },
       { id: 'load-1-slot-9', x: 0.125, y: 0.500, cant_pallets: 0 },
       { id: 'load-1-slot-10', x: 0.135, y: 0.500, cant_pallets: 0 }, 
+      { id: 'load-1-slot-11', x: 0.125, y: 0.575, cant_pallets: 0 },
+      { id: 'load-1-slot-12', x: 0.135, y: 0.575, cant_pallets: 0 },
+      { id: 'load-1-slot-13', x: 0.125, y: 0.590, cant_pallets: 0 },
+      { id: 'load-1-slot-14', x: 0.135, y: 0.590, cant_pallets: 0 },
+      { id: 'load-1-slot-15', x: 0.125, y: 0.605, cant_pallets: 0 },
+      { id: 'load-1-slot-16', x: 0.135, y: 0.605, cant_pallets: 0 },
     ],
     zone: "carga"
   }
@@ -481,6 +494,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
     { id: 'load-2-slot-8', x: 0.175, y: 0.515, cant_pallets: 0 },
     { id: 'load-2-slot-9', x: 0.165, y: 0.500, cant_pallets: 0 },
     { id: 'load-2-slot-10', x: 0.175, y: 0.500, cant_pallets: 0 }, 
+    { id: 'load-2-slot-11', x: 0.165, y: 0.575, cant_pallets: 0 },
+    { id: 'load-2-slot-12', x: 0.175, y: 0.575, cant_pallets: 0 },
+    { id: 'load-2-slot-13', x: 0.165, y: 0.590, cant_pallets: 0 },
+    { id: 'load-2-slot-14', x: 0.175, y: 0.590, cant_pallets: 0 },
+    { id: 'load-2-slot-15', x: 0.165, y: 0.605, cant_pallets: 0 },
+    { id: 'load-2-slot-16', x: 0.175, y: 0.605, cant_pallets: 0 },
    ],
   zone: "carga"
   }
@@ -499,6 +518,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
     { id: 'load-3-slot-8', x: 0.215, y: 0.515, cant_pallets: 0 },
     { id: 'load-3-slot-9', x: 0.205, y: 0.500, cant_pallets: 0 },
     { id: 'load-3-slot-10', x: 0.215, y: 0.500, cant_pallets: 0 }, 
+    { id: 'load-3-slot-11', x: 0.205, y: 0.575, cant_pallets: 0 },
+    { id: 'load-3-slot-12', x: 0.215, y: 0.575, cant_pallets: 0 },
+    { id: 'load-3-slot-13', x: 0.205, y: 0.590, cant_pallets: 0 },
+    { id: 'load-3-slot-14', x: 0.215, y: 0.590, cant_pallets: 0 },
+    { id: 'load-3-slot-15', x: 0.205, y: 0.605, cant_pallets: 0 },
+    { id: 'load-3-slot-16', x: 0.215, y: 0.605, cant_pallets: 0 },
    ],
   zone: "carga"
   },
@@ -516,6 +541,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
     { id: 'load-4-slot-8', x: 0.255, y: 0.515, cant_pallets: 0 },
     { id: 'load-4-slot-9', x: 0.245, y: 0.500, cant_pallets: 0 },
     { id: 'load-4-slot-10', x: 0.255, y: 0.500, cant_pallets: 0 }, 
+    { id: 'load-4-slot-11', x: 0.245, y: 0.575, cant_pallets: 0 },
+    { id: 'load-4-slot-12', x: 0.255, y: 0.575, cant_pallets: 0 },
+    { id: 'load-4-slot-13', x: 0.245, y: 0.590, cant_pallets: 0 },
+    { id: 'load-4-slot-14', x: 0.255, y: 0.590, cant_pallets: 0 },
+    { id: 'load-4-slot-15', x: 0.245, y: 0.605, cant_pallets: 0 },
+    { id: 'load-4-slot-16', x: 0.255, y: 0.605, cant_pallets: 0 },
    ],
   zone: "carga"
 },
@@ -533,6 +564,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
     { id: 'load-5-slot-8', x: 0.295, y: 0.515, cant_pallets: 0 },
     { id: 'load-5-slot-9', x: 0.285, y: 0.500, cant_pallets: 0 },
     { id: 'load-5-slot-10', x: 0.295, y: 0.500, cant_pallets: 0 }, 
+    { id: 'load-5-slot-11', x: 0.285, y: 0.575, cant_pallets: 0 },
+    { id: 'load-5-slot-12', x: 0.295, y: 0.575, cant_pallets: 0 },
+    { id: 'load-5-slot-13', x: 0.285, y: 0.590, cant_pallets: 0 },
+    { id: 'load-5-slot-14', x: 0.295, y: 0.590, cant_pallets: 0 },
+    { id: 'load-5-slot-15', x: 0.285, y: 0.605, cant_pallets: 0 },
+    { id: 'load-5-slot-16', x: 0.295, y: 0.605, cant_pallets: 0 },
    ],
   zone: "carga"
 },
@@ -550,6 +587,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
     { id: 'load-6-slot-8', x: 0.335, y: 0.515, cant_pallets: 0 },
     { id: 'load-6-slot-9', x: 0.325, y: 0.500, cant_pallets: 0 },
     { id: 'load-6-slot-10', x: 0.335, y: 0.500, cant_pallets: 0 }, 
+    { id: 'load-6-slot-11', x: 0.325, y: 0.575, cant_pallets: 0 },
+    { id: 'load-6-slot-12', x: 0.335, y: 0.575, cant_pallets: 0 },
+    { id: 'load-6-slot-13', x: 0.325, y: 0.590, cant_pallets: 0 },
+    { id: 'load-6-slot-14', x: 0.335, y: 0.590, cant_pallets: 0 },
+    { id: 'load-6-slot-15', x: 0.325, y: 0.605, cant_pallets: 0 },
+    { id: 'load-6-slot-16', x: 0.335, y: 0.605, cant_pallets: 0 },
    ],
   zone: "carga"
   },
@@ -567,6 +610,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
       { id: 'load-7-slot-8', x: 0.375, y: 0.515, cant_pallets: 0 },
       { id: 'load-7-slot-9', x: 0.365, y: 0.500, cant_pallets: 0 },
       { id: 'load-7-slot-10', x: 0.375, y: 0.500, cant_pallets: 0 },
+      { id: 'load-7-slot-11', x: 0.365, y: 0.575, cant_pallets: 0 },
+      { id: 'load-7-slot-12', x: 0.375, y: 0.575, cant_pallets: 0 },
+      { id: 'load-7-slot-13', x: 0.365, y: 0.590, cant_pallets: 0 },
+      { id: 'load-7-slot-14', x: 0.375, y: 0.590, cant_pallets: 0 },
+      { id: 'load-7-slot-15', x: 0.365, y: 0.605, cant_pallets: 0 },
+      { id: 'load-7-slot-16', x: 0.375, y: 0.605, cant_pallets: 0 },
     ],
     zone: "carga"
   },
@@ -584,6 +633,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
       { id: 'load-8-slot-8', x: 0.415, y: 0.515, cant_pallets: 0 },
       { id: 'load-8-slot-9', x: 0.405, y: 0.500, cant_pallets: 0 },
       { id: 'load-8-slot-10', x: 0.415, y: 0.500, cant_pallets: 0 },
+      { id: 'load-8-slot-11', x: 0.405, y: 0.575, cant_pallets: 0 },
+      { id: 'load-8-slot-12', x: 0.415, y: 0.575, cant_pallets: 0 },
+      { id: 'load-8-slot-13', x: 0.405, y: 0.590, cant_pallets: 0 },
+      { id: 'load-8-slot-14', x: 0.415, y: 0.590, cant_pallets: 0 },
+      { id: 'load-8-slot-15', x: 0.405, y: 0.605, cant_pallets: 0 },
+      { id: 'load-8-slot-16', x: 0.415, y: 0.605, cant_pallets: 0 },
     ],
     zone: "carga"
   },
@@ -601,6 +656,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
       { id: 'load-9-slot-8', x: 0.455, y: 0.515, cant_pallets: 0 },
       { id: 'load-9-slot-9', x: 0.445, y: 0.500, cant_pallets: 0 },
       { id: 'load-9-slot-10', x: 0.455, y: 0.500, cant_pallets: 0 },
+      { id: 'load-9-slot-11', x: 0.445, y: 0.575, cant_pallets: 0 },
+      { id: 'load-9-slot-12', x: 0.455, y: 0.575, cant_pallets: 0 },
+      { id: 'load-9-slot-13', x: 0.445, y: 0.590, cant_pallets: 0 },
+      { id: 'load-9-slot-14', x: 0.455, y: 0.590, cant_pallets: 0 },
+      { id: 'load-9-slot-15', x: 0.445, y: 0.605, cant_pallets: 0 },
+      { id: 'load-9-slot-16', x: 0.455, y: 0.605, cant_pallets: 0 },
     ],
     zone: "carga"
   }
@@ -619,6 +680,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
       { id: 'load-10-slot-8', x: 0.495, y: 0.515, cant_pallets: 0 },
       { id: 'load-10-slot-9', x: 0.485, y: 0.500, cant_pallets: 0 },
       { id: 'load-10-slot-10', x: 0.495, y: 0.500, cant_pallets: 0 },
+      { id: 'load-10-slot-11', x: 0.485, y: 0.575, cant_pallets: 0 },
+      { id: 'load-10-slot-12', x: 0.495, y: 0.575, cant_pallets: 0 },
+      { id: 'load-10-slot-13', x: 0.485, y: 0.590, cant_pallets: 0 },
+      { id: 'load-10-slot-14', x: 0.495, y: 0.590, cant_pallets: 0 },
+      { id: 'load-10-slot-15', x: 0.485, y: 0.605, cant_pallets: 0 },
+      { id: 'load-10-slot-16', x: 0.495, y: 0.605, cant_pallets: 0 },
     ],
     zone: "carga"
   },
@@ -636,6 +703,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
       { id: 'load-11-slot-8', x: 0.535, y: 0.515, cant_pallets: 0 },
       { id: 'load-11-slot-9', x: 0.525, y: 0.500, cant_pallets: 0 },
       { id: 'load-11-slot-10', x: 0.535, y: 0.500, cant_pallets: 0 },
+      { id: 'load-11-slot-11', x: 0.525, y: 0.575, cant_pallets: 0 },
+      { id: 'load-11-slot-12', x: 0.535, y: 0.575, cant_pallets: 0 },
+      { id: 'load-11-slot-13', x: 0.525, y: 0.590, cant_pallets: 0 },
+      { id: 'load-11-slot-14', x: 0.535, y: 0.590, cant_pallets: 0 },
+      { id: 'load-11-slot-15', x: 0.525, y: 0.605, cant_pallets: 0 },
+      { id: 'load-11-slot-16', x: 0.535, y: 0.605, cant_pallets: 0 },
     ],
     zone: "carga"
   },
@@ -653,6 +726,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
       { id: 'load-12-slot-8', x: 0.575, y: 0.515, cant_pallets: 0 },
       { id: 'load-12-slot-9', x: 0.565, y: 0.500, cant_pallets: 0 },
       { id: 'load-12-slot-10', x: 0.575, y: 0.500, cant_pallets: 0 },
+      { id: 'load-12-slot-11', x: 0.565, y: 0.575, cant_pallets: 0 },
+      { id: 'load-12-slot-12', x: 0.575, y: 0.575, cant_pallets: 0 },
+      { id: 'load-12-slot-13', x: 0.565, y: 0.590, cant_pallets: 0 },
+      { id: 'load-12-slot-14', x: 0.575, y: 0.590, cant_pallets: 0 },
+      { id: 'load-12-slot-15', x: 0.565, y: 0.605, cant_pallets: 0 },
+      { id: 'load-12-slot-16', x: 0.575, y: 0.605, cant_pallets: 0 },
     ],
     zone: "carga"
   },
@@ -670,6 +749,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
       { id: 'load-13-slot-8', x: 0.615, y: 0.515, cant_pallets: 0 },
       { id: 'load-13-slot-9', x: 0.605, y: 0.500, cant_pallets: 0 },
       { id: 'load-13-slot-10', x: 0.615, y: 0.500, cant_pallets: 0 },
+      { id: 'load-13-slot-11', x: 0.605, y: 0.575, cant_pallets: 0 },
+      { id: 'load-13-slot-12', x: 0.615, y: 0.575, cant_pallets: 0 },
+      { id: 'load-13-slot-13', x: 0.605, y: 0.590, cant_pallets: 0 },
+      { id: 'load-13-slot-14', x: 0.615, y: 0.590, cant_pallets: 0 },
+      { id: 'load-13-slot-15', x: 0.605, y: 0.605, cant_pallets: 0 },
+      { id: 'load-13-slot-16', x: 0.615, y: 0.605, cant_pallets: 0 },
     ],
     zone: "carga"
   },
@@ -687,6 +772,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
       { id: 'load-14-slot-8', x: 0.655, y: 0.515, cant_pallets: 0 },
       { id: 'load-14-slot-9', x: 0.645, y: 0.500, cant_pallets: 0 },
       { id: 'load-14-slot-10', x: 0.655, y: 0.500, cant_pallets: 0 },
+      { id: 'load-14-slot-11', x: 0.645, y: 0.575, cant_pallets: 0 },
+      { id: 'load-14-slot-12', x: 0.655, y: 0.575, cant_pallets: 0 },
+      { id: 'load-14-slot-13', x: 0.645, y: 0.590, cant_pallets: 0 },
+      { id: 'load-14-slot-14', x: 0.655, y: 0.590, cant_pallets: 0 },
+      { id: 'load-14-slot-15', x: 0.645, y: 0.605, cant_pallets: 0 },
+      { id: 'load-14-slot-16', x: 0.655, y: 0.605, cant_pallets: 0 },
     ],
     zone: "carga"
   },
@@ -704,6 +795,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
       { id: 'load-15-slot-8', x: 0.695, y: 0.515, cant_pallets: 0 },
       { id: 'load-15-slot-9', x: 0.685, y: 0.500, cant_pallets: 0 },
       { id: 'load-15-slot-10', x: 0.695, y: 0.500, cant_pallets: 0 },
+      { id: 'load-15-slot-11', x: 0.685, y: 0.575, cant_pallets: 0 },
+      { id: 'load-15-slot-12', x: 0.695, y: 0.575, cant_pallets: 0 },
+      { id: 'load-15-slot-13', x: 0.685, y: 0.590, cant_pallets: 0 },
+      { id: 'load-15-slot-14', x: 0.695, y: 0.590, cant_pallets: 0 },
+      { id: 'load-15-slot-15', x: 0.685, y: 0.605, cant_pallets: 0 },
+      { id: 'load-15-slot-16', x: 0.695, y: 0.605, cant_pallets: 0 },
     ],
     zone: "carga"
   },
@@ -721,6 +818,12 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
       { id: 'load-16-slot-8', x: 0.735, y: 0.515, cant_pallets: 0 },
       { id: 'load-16-slot-9', x: 0.725, y: 0.500, cant_pallets: 0 },
       { id: 'load-16-slot-10', x: 0.735, y: 0.500, cant_pallets: 0 },
+      { id: 'load-16-slot-11', x: 0.725, y: 0.575, cant_pallets: 0 },
+      { id: 'load-16-slot-12', x: 0.735, y: 0.575, cant_pallets: 0 },
+      { id: 'load-16-slot-13', x: 0.725, y: 0.590, cant_pallets: 0 },
+      { id: 'load-16-slot-14', x: 0.735, y: 0.590, cant_pallets: 0 },
+      { id: 'load-16-slot-15', x: 0.725, y: 0.605, cant_pallets: 0 },
+      { id: 'load-16-slot-16', x: 0.735, y: 0.605, cant_pallets: 0 },
     ],
     zone: "carga"
   }
