@@ -36,6 +36,7 @@ export const PARKING_ZONES: ParkingZone[] = [
         { id: 'slot-12', x: 0.875, y: 0.735 , rotation: 305, occupied: false },
         { id: 'slot-13', x: 0.873, y: 0.762, rotation: 305, occupied: false },
         { id: 'slot-14', x: 0.870, y: 0.792, rotation: 305, occupied: false },
+    //    { id: 'slot-15', x: 0.340, y: 0.999, rotation: 305, occupied: false },
 
     ],
     allowedTypes: ['truck1', 'truck2', 'truck3', 'truck4']
@@ -97,5 +98,20 @@ export const PARKING_ZONES: ParkingZone[] = [
         { id: 'slot-crane-5', x: 0.025, y: 0.660, rotation: 90, occupied: false },
     ],
     allowedTypes: ['crane1']
-  }
+  },
+  {
+  id: 'zone-exit',
+  name: 'Zona de Salida',
+  slots: [
+    {
+      id: 'slot-exit-1',
+      x: 0.340,
+      y: 0.999,
+      rotation: 0,
+      occupied: false,
+    },
+  ],
+  allowedTypes: ['truck1', 'truck2'],
+},
+
 ];

@@ -42,6 +42,16 @@ export const SLOT_TO_ROUTE_MAP: Record<string, string> = {
   'slot-18': 'route-parking-18-patio',
   'slot-19': 'route-parking-19-patio',
   'slot-20': 'route-parking-20-patio',
+  'slot-21': 'route-parking-21-patio',
+  'slot-22': 'route-parking-22-patio',
+  'slot-23': 'route-parking-23-patio',
+  'slot-24': 'route-parking-24-patio',
+  'slot-25': 'route-parking-25-patio',
+  'slot-26': 'route-parking-26-patio',
+  'slot-27': 'route-parking-27-patio',
+  'slot-28': 'route-parking-28-patio',
+  'slot-29': 'route-parking-29-patio',
+  'slot-30': 'route-parking-30-patio',
 };
 
 export const LOAD_TO_ROUTE_MAP: Record<string, string> = {
@@ -244,5 +254,44 @@ export function getScheduleWithRouteDetails(): Array<{ schedule: ScheduledRoute;
   return ROUTE_SCHEDULE.map(schedule => {
     const route = PREDEFINED_ROUTES.find(r => r.id === schedule.routeId) || PREDEFINED_ROUTES[0];
     return { schedule, route };
+  });
+}
+
+export function createExitRouteTaskForTruck(
+  truckId: string,
+  actorType: string,
+  parkingSlotId: string,
+  options?: {
+    startAtSimTime?: string;
+    priority?: number;
+    dependsOn?: string[];
+  }
+): SimTask {
+  const routeId = getRouteIdForSlot(parkingSlotId);
+
+  if (!routeId) {
+    throw new Error(
+      `[createExitRouteTaskForTruck] No se encontró ruta para el slot "${parkingSlotId}". ` +
+        `Revisa SLOT_TO_ROUTE_MAP.`
+    );
+  }
+
+  const taskId = `followRouteExit:${truckId}:${parkingSlotId}:${Date.now()}`;
+
+  return createBaseTask({
+    id: taskId,
+    actorId: truckId,
+    actorType,
+    type: 'followRoute',
+    priority: options?.priority ?? 1,
+    startAtSimTime:
+      options?.startAtSimTime !== undefined
+        ? parseHM(options.startAtSimTime)
+        : undefined,
+    dependsOn: options?.dependsOn,
+    payload: {
+      routeId,
+      targetZone: 'zone-exit',   // 👈 NUEVA “zona virtual” de salida
+    },
   });
 }

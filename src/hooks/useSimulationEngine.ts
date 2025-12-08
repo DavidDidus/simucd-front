@@ -133,7 +133,6 @@ export function useSimulationEngine(
     [tasks]
   );
 
-    // 👉 Loop principal de simulación (tick)
    // 👉 Loop principal de simulación (tick)
   useEffect(() => {
     const active =
@@ -164,6 +163,9 @@ export function useSimulationEngine(
       // Actores
       setActorStates(prevStates =>
         prevStates.map(actor => {
+           if (actor.isExited) {
+            return actor;
+          }
           const hasRunningTask = tasks.some(
             t => t.actorId === actor.id && t.status === 'running'
           );
@@ -176,22 +178,6 @@ export function useSimulationEngine(
               t.type === 'followRoute'
           );
 
-          // 🧹 FIX: si el actor está quieto, sin transición, pero tiene tarea running → la damos por completada
-          if (
-            actor.behavior === 'stationary' &&
-            !hasTransition &&
-            hasRunningTask
-          ) {
-            setTasks(prev =>
-              prev.map(t =>
-                t.actorId === actor.id && t.status === 'running'
-                  ? { ...t, status: 'completed' }
-                  : t
-              )
-            );
-            console.log(`🧹 FIX: reseteada tarea atascada para camión ${actor.id}`);
-          }
-
           // 1) Arrancar tarea si no tiene transición ni tarea en curso
           if (!hasTransition && !hasRunningTask) {
             const nextTask = getNextTaskForActor(actor.id, logicalSimTime);
@@ -203,14 +189,35 @@ export function useSimulationEngine(
             ) {
               const targetZone =
                 (nextTask as any).payload?.targetZone ?? 'zone-load';
+              
+              
+const targetRouteId = nextTask.payload.routeId;
+const targetRoute = PREDEFINED_ROUTES.find(
+  r => r.id === targetRouteId
+);
 
-              // 🆕 Si la tarea es "volver al parking", liberamos el slot de carga
-              if (targetZone === 'zone-parking' && actor.parkingSlotId) {
+if (!targetRoute) {
+  console.warn(
+    `[Engine] ❌ No se encontró targetRoute "${targetRouteId}" para actor ${actor.id}. Marcando tarea como completada para evitar loop.`
+  );
+
+  // Evita que la tarea se siga intentando en cada tick
+  updateTaskStatus(nextTask.id, 'completed');
+  return actor;
+}
+
+
+              // 🆕 Si la tarea es "volver al parking" o "salir del patio", liberamos su slot
+              if (
+                (targetZone === 'zone-parking' || targetZone === 'zone-exit') &&
+                actor.parkingSlotId
+              ) {
                 console.log(
-                  `🚛 ${actor.id} saliendo de slot de carga ${actor.parkingSlotId} hacia parking`
+                  `🚛 ${actor.id} saliendo de slot ${actor.parkingSlotId} hacia ${targetZone}`
                 );
                 releaseSlot(actor.parkingSlotId);
               }
+
 
               // ⏱ Throttle de 1 minuto SOLO para tareas que van a zone-load
               if (
@@ -221,10 +228,6 @@ export function useSimulationEngine(
                 return actor;
               }
 
-              const targetRouteId = nextTask.payload.routeId;
-              const targetRoute = PREDEFINED_ROUTES.find(
-                r => r.id === targetRouteId
-              );
 
               if (targetRoute) {
                 const routeEnd: Point =
@@ -244,47 +247,76 @@ export function useSimulationEngine(
 
                 let currentPosition: Point;
 
-                if (
-                  actor.parkingPosition &&
-                  actor.behavior === 'stationary' &&
-                  actor.cursor === 0
-                ) {
-                  currentPosition = {
-                    x: actor.parkingPosition.x,
-                    y: actor.parkingPosition.y,
-                  };
-                } else {
-                  const currentRoute = PREDEFINED_ROUTES.find(
-                    r => r.id === actor.routeId
-                  );
-                  if (!currentRoute) return actor;
+if (actor.parkingPosition) {
+  // 🚛 Camión en un slot (parking / load), usar directamente esa posición
+  currentPosition = {
+    x: actor.parkingPosition.x,
+    y: actor.parkingPosition.y,
+  };
+} else {
+  // 🚛 Camión en una ruta → tomar su posición actual en la ruta
+  const currentRoute = PREDEFINED_ROUTES.find(
+    r => r.id === actor.routeId
+  );
+  if (!currentRoute) return actor;
 
-                  const currentPathPx = buildPathPx(
-                    currentRoute.points,
-                    stageWidth,
-                    stageHeight
-                  );
-                  if (currentPathPx.total === 0) return actor;
+  const currentPathPx = buildPathPx(
+    currentRoute.points,
+    stageWidth,
+    stageHeight
+  );
+  if (currentPathPx.total === 0) return actor;
 
-                  const pose = poseAlongPath(currentPathPx, actor.cursor);
-                  currentPosition = {
-                    x: pose.x / stageWidth,
-                    y: pose.y / stageHeight,
-                  };
-                }
+  const pose = poseAlongPath(currentPathPx, actor.cursor);
+  currentPosition = {
+    x: pose.x / stageWidth,
+    y: pose.y / stageHeight,
+  };
+}
 
                 const transitionPath = aStarPathfinding(
-                  currentPosition,
-                  targetRoute.points[0],
-                  PREDEFINED_OBSTACLES
-                );
+  currentPosition,
+  targetRoute.points[0],
+  PREDEFINED_OBSTACLES
+);
 
-                if (!transitionPath || transitionPath.length === 0) {
-                  console.warn(
-                    `⚠️ No se pudo construir transición para actor ${actor.id} hacia ruta ${targetRoute.id}`
-                  );
-                  return actor;
-                }
+if (!transitionPath || transitionPath.length === 0) {
+  console.warn(
+    `⚠️ No se pudo construir transición para actor ${actor.id} hacia ruta ${targetRoute.id}`
+  );
+  // No arrancamos nada
+  return actor;
+}
+
+// 🆕 Comprobar si ese path tiene longitud real (> 0 px)
+const transitionPathPx = buildPathPx(
+  transitionPath,
+  stageWidth,
+  stageHeight
+);
+
+if (transitionPathPx.total === 0) {
+  // 👉 Ya estamos, en la práctica, en el inicio de la ruta.
+  // No tiene sentido crear una RouteTransition; saltamos directo a la ruta.
+  console.log(
+    `[Engine] ℹ️ ${actor.id} ya está en el inicio de ${targetRoute.id}, arrancando ruta sin transición`
+  );
+
+  updateTaskStatus(nextTask.id, 'running');
+
+  return {
+    ...actor,
+    behavior: 'mobile',
+    currentTransition: undefined,
+    routeId: targetRoute.id,
+    cursor: 0,
+    direction: 1,
+    parkingSlotId:
+      targetZone === 'zone-parking' || targetZone === 'zone-exit'
+        ? undefined
+        : actor.parkingSlotId,
+  };
+}
 
                 updateTaskStatus(nextTask.id, 'running');
 
@@ -311,10 +343,10 @@ export function useSimulationEngine(
                   cursor: 0,
                   direction: 1,
                   // 🆕 si va al parking, ya no "pertenece" a un slot-load
-                  parkingSlotId:
-                    targetZone === 'zone-parking'
-                      ? undefined
-                      : actor.parkingSlotId,
+                 parkingSlotId:
+                  targetZone === 'zone-parking' || targetZone === 'zone-exit'
+                    ? undefined
+                    : actor.parkingSlotId,
                 };
               }
             }
@@ -326,6 +358,7 @@ if (actor.currentTransition?.isTransitioning) {
   const transition = actor.currentTransition as RouteTransition & {
     parkingSlotId?: string;
     targetZone?: string;
+    isExit?: boolean;    // 👈 nuevo flag
   };
 
   const transitionPathPx = buildPathPx(
@@ -339,6 +372,37 @@ if (actor.currentTransition?.isTransitioning) {
 
     const parkingSlotId = transition.parkingSlotId;
     const targetZone = transition.targetZone ?? 'zone-load';
+
+    if (!parkingSlotId && (transition.isExit || targetZone === 'zone-exit')) {
+    const lastPoint =
+      transition.transitionPath[transition.transitionPath.length - 1] ?? { x: 0.340, y: 0.999 };
+
+    setTasks(prev =>
+      prev.map(t =>
+        t.actorId === actor.id &&
+        t.type === 'followRoute' &&
+        t.status === 'running'
+          ? { ...t, status: 'completed' }
+          : t
+      )
+    );
+
+    return {
+      ...actor,
+      currentTransition: undefined,
+      behavior: 'stationary',
+      routeId: transition.toRoute.id,
+      cursor: 0,
+      direction: 0,
+      parkingSlotId: undefined,
+      parkingPosition: {
+        x: lastPoint.x,
+        y: lastPoint.y,
+        rotation: actor.parkingPosition?.rotation ?? 0,
+      },
+      isExited: true,  // 👈 marcar como salido
+    };
+  }
 
     // 🔹 Caso especial: transición hacia un slot de parking/carga,
     // pero el path está vacío → “teletransportar” al slot y cerrar la tarea.
@@ -400,11 +464,43 @@ if (actor.currentTransition?.isTransitioning) {
   const SPEED = stageWidth * 0.02;
   let newCursor = actor.cursor + SPEED * dtSim;
 
-  if (newCursor >= transitionPathPx.total) {
-    console.log(`✅ Actor ${actor.id}: Transición completada`);
+ if (newCursor >= transitionPathPx.total) {
+  console.log(`✅ Actor ${actor.id}: Transición completada`);
 
-    const parkingSlotId = transition.parkingSlotId;
-    const targetZone = transition.targetZone ?? 'zone-load';
+  const parkingSlotId = transition.parkingSlotId;
+  const targetZone = transition.targetZone ?? 'zone-load';
+
+  if (transition.isExit && targetZone === 'zone-exit') {
+      const lastPoint =
+        transition.transitionPath[transition.transitionPath.length - 1];
+
+      setTasks(prev =>
+        prev.map(t =>
+          t.actorId === actor.id &&
+          t.type === 'followRoute' &&
+          t.status === 'running'
+            ? { ...t, status: 'completed' }
+            : t
+        )
+      );
+
+      return {
+        ...actor,
+        currentTransition: undefined,
+        behavior: 'stationary',
+        routeId: transition.toRoute.id,
+        cursor: 0,
+        direction: 0,
+        // 👇 importante: sin parkingSlotId → nunca entra en lógica de slots
+        parkingSlotId: undefined,
+        parkingPosition: {
+          x: lastPoint.x,  // ~0.340
+          y: lastPoint.y,  // ~0.999
+          rotation: actor.parkingPosition?.rotation ?? 0,
+        },
+        isExited: true,  // 👈 marcar como salido
+      };
+    }
 
     if (parkingSlotId) {
       if (actor.parkingSlotId && actor.parkingSlotId !== parkingSlotId) {
@@ -512,34 +608,94 @@ if (actor.currentTransition?.isTransitioning) {
                 (runningFollowRouteTask as any).payload?.targetZone ??
                 'zone-load';
 
-              const bestSlot = findNearestFreeSlotInZone(targetZone, routeEnd);
+              // 🔹 CASO ESPECIAL: salida → no usamos slots, sólo un punto fijo
+if (targetZone === 'zone-exit') {
+  const exitPoint = { x: 0.340, y: 0.999 };
 
-              if (!bestSlot) {
-                setTasks(prev =>
-                  prev.map(t =>
-                    t.id === runningFollowRouteTask.id
-                      ? { ...t, status: 'completed' }
-                      : t
-                  )
-                );
+  const exitPath = aStarPathfinding(
+    routeEnd,
+    exitPoint,
+    PREDEFINED_OBSTACLES
+  );
 
-                console.log(
-                  `⚠️ Actor ${actor.id}: sin slots libres en ${targetZone}`
-                );
+  if (!exitPath || exitPath.length === 0) {
+    console.warn(
+      `⚠️ Actor ${actor.id}: no se pudo calcular path a zona de salida`
+    );
 
-                return {
-                  ...actor,
-                  cursor: actorPathPx.total,
-                  direction: 0,
-                  behavior: 'stationary',
-                };
-              }
+    // Damos por terminada la tarea igualmente
+    setTasks(prev =>
+      prev.map(t =>
+        t.id === runningFollowRouteTask.id
+          ? { ...t, status: 'completed' }
+          : t
+      )
+    );
 
-              const parkingPath = aStarPathfinding(
-                routeEnd,
-                { x: bestSlot.x, y: bestSlot.y },
-                PREDEFINED_OBSTACLES
-              );
+    return {
+      ...actor,
+      cursor: actorPathPx.total,
+      direction: 0,
+      behavior: 'stationary',
+    };
+  }
+
+  console.log(
+    `🚛 Actor ${actor.id}: ruta completada, moviéndose a zona de salida (sin ocupar slot)`
+  );
+
+  const exitTransition: RouteTransition & {
+    targetZone?: string;
+    isExit?: boolean;
+  } = {
+    isTransitioning: true,
+    transitionPath: exitPath,
+    fromRoute: actorRoute,
+    toRoute: actorRoute,
+    progress: 0,
+    targetReached: false,
+    targetZone: 'zone-exit',
+    isExit: true,
+  };
+
+  return {
+    ...actor,
+    currentTransition: exitTransition as RouteTransition,
+    cursor: 0,
+    direction: 1,
+  };
+}
+
+// 🔹 Resto de zonas: comportamiento normal con slots
+const bestSlot = findNearestFreeSlotInZone(targetZone, routeEnd);
+
+if (!bestSlot) {
+  setTasks(prev =>
+    prev.map(t =>
+      t.id === runningFollowRouteTask.id
+        ? { ...t, status: 'completed' }
+        : t
+    )
+  );
+
+  console.log(
+    `⚠️ Actor ${actor.id}: sin slots libres en ${targetZone}`
+  );
+
+  return {
+    ...actor,
+    cursor: actorPathPx.total,
+    direction: 0,
+    behavior: 'stationary',
+  };
+}
+
+const parkingPath = aStarPathfinding(
+  routeEnd,
+  { x: bestSlot.x, y: bestSlot.y },
+  PREDEFINED_OBSTACLES
+);
+
 
               if (!parkingPath || parkingPath.length === 0) {
                 setTasks(prev =>
@@ -634,7 +790,6 @@ console.log('🚛 [DEBUG] bestSlot encontrado:', bestSlot);
     actorsLoading,
     actorStates.length,
     speedMult,
-    tasks,
     getNextTaskForActor,
     setActorStates,
     stageWidth,

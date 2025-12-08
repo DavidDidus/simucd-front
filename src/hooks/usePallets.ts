@@ -70,7 +70,7 @@ type CranePalletEvent = {
     startAtSec: number; // cuando empieza a moverlo
     endAtSec: number;   // cuando debería haber llegado
     kind: 'acomodo' | 'despacho';
-    operacion: 'acomodo_pallet' | 'despacho_completo' | 'carga_pallet';
+    operacion: 'acomodo_pallet' | 'despacho_completo' | 'carga_pallet' | 'acomodo_staging_mixto';
     label: string;
   };
 
@@ -335,6 +335,35 @@ export function usePallets({ backendResponse, simTimeSec, actorStates,craneTrans
       });
       return;
     }
+        // 👇 NUEVO: acomodo de pallet mixto desde staging -> zona de espera
+    if (
+      e.operacion === 'acomodo_staging_mixto' &&
+      baseLabel.toLowerCase().startsWith('acomodando pallet mixto')
+    ) {
+      // Ej: "Acomodando pallet mixto MX571 (staging)"
+      const match = baseLabel.match(
+        /Acomodando\s+pallet\s+mixto\s+([A-Za-z0-9_-]+)/i
+      );
+      const palletIdFromLabel = match?.[1];
+
+      const palletId =
+        palletIdFromLabel ??
+        `pallet-staging-${e.id_recurso}-${e.hora_fin ?? e.hora_comienzo}`;
+
+      const camionId = palletToCamionMap[palletId] ?? null;
+
+      events.push({
+        id: `crane-${e.id_recurso}-${e.hora_comienzo}-${palletId}-acomodo-staging`,
+        palletId,
+        camionId,
+        startAtSec,
+        endAtSec,
+        kind: 'acomodo',                 // 👉 es un acomodo, no despacho
+        operacion: 'acomodo_staging_mixto',
+        label: baseLabel,
+      });
+      return;
+    }
 
     // 👇 Despacho de pallets completos desde zona "completo"
     if (
@@ -564,30 +593,48 @@ export function usePallets({ backendResponse, simTimeSec, actorStates,craneTrans
     if (!runtimePallet) {
       return;
     }
+        // 2) Determinar zona destino y si se carga al camión o no
+    let targetZoneId: string | null = null;
+    let dropOnTruck = false;
+    let dropTruckId: string | null = null;
 
-    // 2) resolver camionId: runtime -> planificación
-    const camionId =
-      runtimePallet.camionAsignado ?? ev.camionId ?? null;
-    if (!camionId) {
-      // sin camión todavía, se reintenta en el próximo tick
-      return;
+    if (ev.operacion === 'acomodo_staging_mixto') {
+      // 👉 staging mixto va a la zona de espera, sin tocar camión
+      targetZoneId = 'await-zone';
+      dropOnTruck = false;
+      dropTruckId = null;
+    } else {
+      // 👉 resto de operaciones sigue la lógica actual basada en camión
+      const camionId =
+        runtimePallet.camionAsignado ?? ev.camionId ?? null;
+      if (!camionId) {
+        // sin camión todavía, se reintenta en el próximo tick
+        return;
+      }
+
+      const loadZoneId = findLoadZoneForCamion(camionId, actorStates);
+      if (!loadZoneId) {
+        // camión todavía no estacionado
+        return;
+      }
+
+      targetZoneId = loadZoneId;
+
+      if (ev.kind === 'despacho') {
+        dropOnTruck = true;
+        dropTruckId = camionId;
+      }
     }
 
-    // 3) ver si el camión ya está en un slot-load-X
-    const loadZoneId = findLoadZoneForCamion(camionId, actorStates);
-    if (!loadZoneId) {
-      // camión todavía no estacionado, se reintenta luego
-      return;
-    }
-
-    const zone = PALLET_SPAWN_POINTS.find((z) => z.id === loadZoneId);
+    const zone = PALLET_SPAWN_POINTS.find((z) => z.id === targetZoneId);
     if (!zone || !zone.slots || zone.slots.length === 0) {
       console.warn(
-        `[usePallets] No se encontró zona de carga "${loadZoneId}" para evento de grúa ${ev.id}`
+        `[usePallets] No se encontró zona destino "${targetZoneId}" para evento de grúa ${ev.id}`
       );
       firedCraneEventsRef.current.add(ev.id);
       return;
     }
+
 
     // 3.a) Si aún NO iniciamos el movimiento, fijamos origen/destino y marcamos inTransit
     if (!startedCraneEventsRef.current.has(ev.id)) {
@@ -641,8 +688,8 @@ export function usePallets({ backendResponse, simTimeSec, actorStates,craneTrans
           transitEndSimSec: ev.endAtSec,
           pathNorm,
           // 👇 para despacho completo *y* carga_pallet, lo cargamos al camión
-          dropOnTruck: ev.kind === 'despacho',
-          dropTruckId: camionId,
+          dropOnTruck,
+          dropTruckId,
         };
 
         return updated;

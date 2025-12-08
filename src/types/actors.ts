@@ -38,6 +38,7 @@ export type ActorState = {
   direction?: 1 | -1 | 0;
   operationState?: 'idle' | 'moving' | 'loading' | 'unloading';
   taskQueue?: string[]; // Cola de tareas pendientes
+  isExited?: boolean; 
 };
 
 
