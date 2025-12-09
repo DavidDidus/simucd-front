@@ -25,6 +25,17 @@ const initial: Params = {
   camiones: 20,
   personal_subestandar: 1,
   entrada_subestandar: 1,
+  personal_clasificacion: 1,
+  entrada_clasificacion: 1,
+  entrada_estandarizacion: 1,
+  personal_reempaque: 1,
+  entrada_reempaque: 1,
+  entrada_sin_recurso: 1,
+  prv_danado: 1,
+  saca_carton: 1,
+  saca_film: 1,
+  saca_pet: 1,
+  
 };
 
 export default function App() {

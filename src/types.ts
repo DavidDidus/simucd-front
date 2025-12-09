@@ -8,6 +8,17 @@ export type Params = {
   camiones: number;
   personal_subestandar: number;
   entrada_subestandar: number;
+  prv_danado: number;
+  saca_carton: number;
+  saca_film: number;
+  saca_pet: number;
+  personal_clasificacion: number;
+  entrada_clasificacion: number;
+  entrada_estandarizacion: number;
+  personal_reempaque: number;
+  entrada_reempaque: number;
+  entrada_sin_recurso: number;
+
 };
 
 
