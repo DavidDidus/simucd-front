@@ -3,6 +3,8 @@ import Timeline from "./Timeline";
 import Tabs from "./Tabs";
 import type { TabId } from "./Tabs";
 import { getFormattedActiveTime } from "../utils/dataUtils";
+import WaitBarChart from "./WaitTimeBarChart";
+import { buildWaitTimeChartData } from "../utils/time";
 
 interface DashboardProps {
   activeTab: TabId;
@@ -13,6 +15,7 @@ interface DashboardProps {
     values: number[];
     utilization: number[];
   };
+  waitChartData: any;
   kpis: {
     iceo: string | number;
     endTime: string;
@@ -26,11 +29,14 @@ export function Dashboard({
   activeTab,
   onTabChange,
   chartData,
+  waitChartData,
   kpis,
   timelineData,
   timelineLabel,
   norm,
 }: DashboardProps) {
+  const waitTimeChartData = buildWaitTimeChartData(waitChartData);
+  
   return (
     <div
       className="dash-card card-with-tabs"
@@ -57,6 +63,15 @@ export function Dashboard({
           utilization={chartData.utilization}
           className="subcard grid-chart"
         />
+
+        {activeTab === "noche" && (
+          <WaitBarChart
+            data={waitChartData}
+            title="Espera promedio por recurso"
+            className="grid-wait-chart"
+            unit="min"
+          />
+        )}
 
         <div className="subcard kpi-card grid-kpis">
           <div className="card-title">KPIs clave</div>

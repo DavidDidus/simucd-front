@@ -213,7 +213,7 @@ export function useSimulation() {
       console.log("Base simulation result:", data);
 
       // Disparar Monte Carlo en segundo plano
-      //void runMonteCarlo(params, night, dayA, dayB);
+      void runMonteCarlo(params, night, dayA, dayB);
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const detail = (err.response?.data as any)?.detail;

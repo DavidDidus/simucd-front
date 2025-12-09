@@ -165,6 +165,8 @@ export default function App() {
     utilization: buildUtilization(activeTab, recDia, recNoche),
   };
 
+  const waitChartData = normalized.noche?.tiempos_espera_promedio
+
   const kpis = {
     iceo:
       (activeTab === "noche"
@@ -370,6 +372,7 @@ export default function App() {
             activeTab={activeTab}
             onTabChange={setActiveTab}
             chartData={chartData}
+            waitChartData={waitChartData}
             kpis={kpis}
             timelineData={timelineData}
             timelineLabel={timelineLabel}

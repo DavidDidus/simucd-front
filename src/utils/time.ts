@@ -24,3 +24,26 @@ export const shiftForSecond = (totalSec: number): Shift => {
 
 export const shiftLabel = (s: Shift) =>
   s === 'noche' ? 'Noche' : s === 'turnoA' ? 'Turno A' : 'Turno B';
+
+
+export interface WaitTimePoint {
+  recurso: string;
+  esperaPromedio: number;
+}
+
+export function buildWaitTimeChartData(
+  tiempos: Record<string, number>
+): WaitTimePoint[] {
+  const labelMap: Record<string, string> = {
+    picker: "Picker",
+    grua: "Gruero",
+    chequeador: "Chequeador",
+    parrillero: "Parrillero",
+  };
+
+  return Object.entries(tiempos).map(([key, value]) => ({
+    recurso: labelMap[key] ?? key,
+    esperaPromedio: value,
+  }));
+}
+
