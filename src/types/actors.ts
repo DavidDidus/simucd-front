@@ -1,9 +1,12 @@
-
-import grua_horquilla from '../assets/Simulacion/GRUA_HORQUILLA.png';
-import camion_1 from '../assets/Simulacion/T2 VERDE OSCURO.png';
 import type { RouteTransition } from '../utils/routes/scheduledRoutes';
 
-export type ActorType = 'truck1' | 'truck2' | 'truck3' | 'truck4' | 'crane1';
+import camionDistribucion from '../assets/Simulacion/Camión_abastecimiento.png';
+import grua_horquilla from '../assets/Simulacion/GRUA_HORQUILLA.png';
+import camion_1 from '../assets/Simulacion/T2 VERDE OSCURO.png';
+import camionT1 from '../assets/Simulacion/T1_AZUL.png';
+
+
+export type ActorType = 'truck1' | 'truck2' | 'truck3' | 'truck4' | 'crane1' | 'truckT1' | 'truckDistribucion';
 
 export type ActorBehavior = 'mobile' | 'stationary';
 
@@ -51,6 +54,22 @@ export const ACTOR_DEFINITIONS: Record<ActorType, Omit<ActorConfig, 'count'>> = 
     size: { width: 80, height: 120 },
     behavior: 'stationary', // 🆕 Estacionado por defecto
     //parkingPosition: { x: 0.643, y: 0.425, rotation: 305 } // 🆕 Posición normalizada
+  },
+  truckT1: {
+    id: 'truckT1',
+    name: 'Camión Tipo T1',
+    imagePath: camionT1,
+    speed: 0.8,
+    size: { width: 80, height: 120 },
+    behavior: 'stationary', // 🆕 Estacionado por defecto
+  },
+  truckDistribucion: {
+    id: 'truckDistribucion',
+    name: 'Camión de Distribución',
+    imagePath: camionDistribucion,
+    speed: 0.75,
+    size: { width: 200, height: 250 },
+    behavior: 'stationary',
   },
   truck2: {
     id: 'truck2',

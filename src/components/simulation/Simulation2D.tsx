@@ -16,9 +16,10 @@ import { useRoute } from '../../hooks/useRoute';
 import { useObstacle } from '../../hooks/useObstacle';
 import { PREDEFINED_OBSTACLES } from '../../utils/routes/obstacles';
 import { aStarPathfinding } from '../../utils/routes/pathfinding';
-import { createFollowRouteTaskForTruck, createFollowRouteTaskFromLoadSlot , createExitRouteTaskForTruck } from '../../utils/routes/scheduledRoutes';
+import { createFollowRouteTaskForTruck, createFollowRouteTaskFromLoadSlot , createExitRouteTaskForTruck, createDistributionEntryTaskForTruck, createDistributionExitTaskForTruck } from '../../utils/routes/scheduledRoutes';
 import { usePallets, type EventoRecurso } from '../../hooks/usePallets';
 import { PalletsLayer } from './layers/PalletsLayer';
+import { PARKING_ZONES } from '../../types/parkingSlot';
 import PalletSpawnPointsLayer from './layers/PalletSpawnPointsLayer';
 import ParkingSlotsLayer from './layers/ParkingSlotLayer';
 import SaveObstacleModal from './modals/SaveObstacleModal';
@@ -35,14 +36,49 @@ import type { RuntimePallet } from '../../types/pallets';
 import grua_horquilla from '../../assets/Simulacion/GRUA_HORQUILLA.png';
 import pallet_icon from '../../assets/Simulacion/PALLET.png'; 
 
-
-
 type EditMode = 'route' | 'obstacle';
 
 type BackendResponse = {
-  turno_noche?: { linea_tiempo_recursos?: EventoRecurso[]; [key: string]: any };
-  turno_dia?: { linea_tiempo_recursos?: EventoRecurso[]; [key: string]: any };
+  // 🔹 Nueva API: toda la línea de tiempo unificada aquí
+  linea_tiempo_recursos?: EventoRecurso[];
+
+  // 🔹 Turno noche con sus métricas (pero sin línea de tiempo)
+  turno_noche?: {
+    turno_fin_real?: any;
+    timeline?: any;
+    ice_mixto?: any;
+    ocupacion_recursos?: any;
+    planificacion_detalle?: any;
+    tiempos_espera_promedio?: any;
+    porcentaje_operaciones_con_espera?: any;
+    linea_tiempo_cuello_botella?: any;
+    tasa_defectos?: any;
+    [key: string]: any;
+  };
+
+  // 🔹 Turno día con métricas
+  turno_dia?: {
+    ocupacion_recursos?: any;
+    metricas_turnos?: any;
+    [key: string]: any;
+  };
+
+  // 🔹 Posible wrapper tipo { data: {...} }
+  data?: any;
+
   [key: string]: any;
+};
+
+type DistributionTruckEntryEvent = {
+  key: string;
+  startAtSec: number;
+};
+
+type DistributionTruckExitEvent = {
+  key: string;
+  camionId: string;
+  startAtSec: number;
+  endAtSec: number;
 };
 
 type Props = {
@@ -104,6 +140,13 @@ const toUrl = (m: any) => (typeof m === 'string' ? m : m?.src || '');
     return { x: slot.x, y: slot.y };
   }
 
+function getParkingSlotById(slotId: string) {
+  for (const zone of PARKING_ZONES) {
+    const slot = zone.slots.find(s => s.id === slotId);
+    if (slot) return slot;
+  }
+  return undefined;
+}
 
 
 export default function Simulation2D({
@@ -116,7 +159,6 @@ export default function Simulation2D({
 
   // Imágenes
   const bgImg = useHTMLImage(toUrl(BG_IMPORT));
-  const craneImg = useHTMLImage(toUrl(grua_horquilla));
   const palletImg = useHTMLImage(toUrl(pallet_icon));
 
   // Dimensiones del Stage
@@ -175,6 +217,10 @@ const processedSlotLiberadoKeysRef = useRef<Set<string>>(new Set());
 // Camiones a los que YA les generé una tarea hacia la zona de carga
 const queuedTruckIdsRef = useRef<Set<string>>(new Set());
 
+const distributionTruckInitializedRef = useRef(false);
+
+const processedDistributionEntryKeysRef = useRef<Set<string>>(new Set());
+const processedDistributionExitKeysRef = useRef<Set<string>>(new Set());
 
   // Recursos por turno (UI)
   const [resources, setResources] = useState<ShiftResources>({
@@ -197,7 +243,7 @@ const queuedTruckIdsRef = useRef<Set<string>>(new Set());
 
   const root: any = (backendResponse as any).data ?? backendResponse;
   const linea: EventoRecurso[] | undefined =
-    root?.turno_noche?.linea_tiempo_recursos;
+    root?.linea_tiempo_recursos;
 
   if (!Array.isArray(linea)) return [];
 
@@ -241,7 +287,7 @@ const slotLiberadoEvents = useMemo<SlotLiberadoEvent[]>(() => {
 
   const root: any = (backendResponse as any).data ?? backendResponse;
   const linea: EventoRecurso[] | undefined =
-    root?.turno_noche?.linea_tiempo_recursos;
+    root?.linea_tiempo_recursos;
 
   if (!Array.isArray(linea)) return [];
 
@@ -293,7 +339,7 @@ const truckIdsFromBackend = useMemo(() => {
   // Soporta ambos formatos: { data: { turno_noche }} o { turno_noche } directo
   const root: any = (backendResponse as any).data ?? backendResponse;
   const linea: EventoRecurso[] | undefined =
-    root?.turno_noche?.linea_tiempo_recursos;
+    root?.linea_tiempo_recursos;
 
   if (!Array.isArray(linea)) return [];
 
@@ -331,7 +377,7 @@ const truckIdsFromBackend = useMemo(() => {
 
 
    const craneResourceIds = useMemo(() => {
-    const linea = backendResponse?.turno_noche?.linea_tiempo_recursos;
+    const linea = backendResponse?.linea_tiempo_recursos;
     if (!Array.isArray(linea)) return [];
 
     const ids = new Set<number>();
@@ -364,6 +410,8 @@ const actorCounts = useMemo<Record<ActorType, number>>(
       truck2: 0,
       truck3: 0,
       truck4: 0,
+      truckT1: 0,
+      truckDistribucion: 1,
       crane1: craneCount,
     };
   },
@@ -399,22 +447,28 @@ const actorCounts = useMemo<Record<ActorType, number>>(
   };
 
   const craneMovementEvents = useMemo<CraneMovementEvent[]>(() => {
-  const linea = backendResponse?.turno_noche?.linea_tiempo_recursos;
+  const linea = backendResponse?.linea_tiempo_recursos;
   if (!Array.isArray(linea)) return [];
 
   const events: CraneMovementEvent[] = [];
+  console.log("linea", linea);
 
-  linea
+    linea
     .filter(
       (e: any) =>
         e?.recurso === 'grua' &&
-        (e?.operacion === 'acomodo_pallet' ||
+        (
+          e?.operacion === 'acomodo_pallet' ||
           e?.operacion === 'despacho_completo' ||
           e?.operacion === 'carga_pallet' ||
-          e?.operacion === 'acomodo_staging_mixto'
-        ) &&        // 👈 NUEVO
+          e?.operacion === 'acomodo_staging_mixto' ||
+          // 👇 NUEVO: eventos de carga a camión de distribución
+          (typeof e?.operacion === 'string' &&
+           e.operacion.toLowerCase().startsWith('grua_camion_distribucion'))
+        ) &&
         typeof e?.hora_comienzo === 'string'
     )
+
     .forEach((e: any) => {
       const label = String(e.label ?? '');
 
@@ -444,6 +498,14 @@ const actorCounts = useMemo<Record<ActorType, number>>(
           /Acomodando\s+pallet\s+mixto\s+([A-Za-z0-9_-]+)/i
         );
         palletIdFromLabel = match?.[1];
+      }  else if (
+        typeof e.operacion === 'string' &&
+        e.operacion.toLowerCase().includes('grua_camion_distribucion')
+      ) {
+        // Evento de carga del camión de distribución
+        // No viene id de pallet en el label, usamos un id sintético estable
+        palletIdFromLabel =
+          `pallet-distrib-${e.id_recurso}-${e.hora_fin ?? e.hora_comienzo}`;
       }
 
       const palletId =
@@ -474,6 +536,276 @@ const actorCounts = useMemo<Record<ActorType, number>>(
   return events;
 }, [backendResponse, parseHM]);
 
+const distributionTruckEntryEvents = useMemo<DistributionTruckEntryEvent[]>(() => {
+  // 👇 igual que en truckQueue: soporta backendResponse.data o plano
+  const root: any = (backendResponse as any)?.data ?? backendResponse;
+  const linea: EventoRecurso[] | undefined = root?.linea_tiempo_recursos;
+
+  console.log('[DistributionTruck] linea_tiempo_recursos (raw):', linea);
+
+  if (!Array.isArray(linea)) return [];
+
+  const events: DistributionTruckEntryEvent[] = [];
+
+  linea
+    .filter((e: any) => {
+      // 👇 Lo hacemos un poco más tolerante con espacios y mayúsculas
+      if (e?.recurso !== 'camion_distribucion') return false;
+      if (typeof e?.operacion !== 'string') return false;
+
+      const op = e.operacion.toLowerCase();
+      return op.includes('camion_distribucion') && op.includes('entrada');
+    })
+    .forEach((e: any, idx: number) => {
+      const startAtSec = parseHM(e.hora_comienzo);
+      const key = `distribution-entry-${e.hora_comienzo}-${idx}`;
+
+      events.push({
+        key,
+        startAtSec,
+      });
+    });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+
+  console.log('[DistributionTruck] eventos de entrada parseados:', events);
+  return events;
+}, [backendResponse]);
+
+const distributionTruckExitEvents = useMemo<DistributionTruckExitEvent[]>(() => {
+  const root: any = (backendResponse as any)?.data ?? backendResponse;
+  const linea: EventoRecurso[] | undefined = root?.linea_tiempo_recursos;
+
+  if (!Array.isArray(linea)) return [];
+
+  const events: DistributionTruckExitEvent[] = [];
+
+  linea
+    .filter((e: any) => {
+      if (e?.recurso !== 'camion_distribucion') return false;
+      if (typeof e?.operacion !== 'string') return false;
+
+      const op = e.operacion.toLowerCase();
+      // e.g. "camion_distribucion - salida"
+      return op.includes('salida');
+    })
+    .forEach((e: any, idx: number) => {
+      // 👉 Usamos hora_fin como momento en que debe irse
+      const startAtSec = parseHM(e.hora_fin);
+      const endAtSec = startAtSec + 120; // 
+
+      const camionId = String(e.id_recurso ?? `camion_distribucion-${idx}`);
+      const key = `distribution-exit-${camionId}-${e.hora_fin ?? e.hora_comienzo}-${idx}`;
+
+      events.push({
+        key,
+        camionId,
+        startAtSec,
+        endAtSec,
+      });
+    });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+
+  console.log('[DistributionTruck] eventos de salida parseados:', events);
+  return events;
+}, [backendResponse]);
+
+
+useEffect(() => {
+  if (distributionTruckInitializedRef.current) return;
+  if (!actorStates.length) return;
+
+  const exitSlot = getParkingSlotById('slot-exit-1');
+
+  setActorStates(prev =>
+    prev.map(a => {
+      if (a.type !== 'truckDistribucion') return a;
+
+      let parkingPosition = a.parkingPosition;
+      let parkingSlotId = (a as any).parkingSlotId as string | undefined;
+
+      if (exitSlot) {
+        parkingPosition = {
+          x: exitSlot.x,
+          y: exitSlot.y,
+          rotation: exitSlot.rotation,
+        };
+        parkingSlotId = exitSlot.id;
+      }
+
+      return {
+        ...a,
+        isExited: true,          // 👈 no se ve al inicio
+        parkingPosition,         // 👈 está físicamente en slot-exit-1
+        parkingSlotId,           // 👈 su slot lógico es slot-exit-1
+      };
+    })
+  );
+
+  distributionTruckInitializedRef.current = true;
+}, [actorStates.length, setActorStates]);
+
+useEffect(() => {
+  if (!distributionTruckEntryEvents.length) return;
+  if (!actorStates.length) return;
+
+  distributionTruckEntryEvents.forEach(ev => {
+    if (processedDistributionEntryKeysRef.current.has(ev.key)) return;
+
+    // todavía no llega la hora del evento
+    if (simTimeSec < ev.startAtSec) return;
+
+    console.log(
+      `[DistributionTruck] 🔔 Evento de entrada alcanzado a las ${formatHM(
+        simTimeSec
+      )}, programado para ${formatHM(ev.startAtSec)}`
+    );
+
+    // buscamos el actor truckDistribucion (aunque esté isExited = true)
+    const actor = actorStates.find(a => a.type === 'truckDistribucion');
+
+    if (!actor) {
+      console.warn(
+        '[DistributionTruck] ⚠️ No se encontró actor de tipo truckDistribucion en actorStates'
+      );
+      processedDistributionEntryKeysRef.current.add(ev.key);
+      return;
+    }
+
+    console.log(
+      '[DistributionTruck] Encontrado actor truckDistribucion:',
+      actor.id,
+      'isExited =',
+      actor.isExited,
+      'parkingSlotId =',
+      actor.parkingSlotId,
+      'parkingPosition =',
+      actor.parkingPosition
+    );
+
+    // 1) Hacer visible el camión
+    setActorStates(prev =>
+      prev.map(a =>
+        a.id === actor.id
+          ? { ...a, isExited: false }
+          : a
+      )
+    );
+
+    // 2) Crear la tarea de entrada hacia slot-distribution-2
+    try {
+      const task = createDistributionEntryTaskForTruck(
+        actor.id,
+        actor.type,
+        {
+          startAtSimTime: formatHM(ev.startAtSec),
+          targetSlotId: 'slot-distribution-2',
+        }
+      );
+
+      addTask(task);
+      processedDistributionEntryKeysRef.current.add(ev.key);
+
+      console.log(
+        `[DistributionTruck] ✅ Tarea de entrada creada para ${actor.id} → slot-distribution-2`
+      );
+    } catch (error) {
+      console.error(
+        '[DistributionTruck] ❌ Error creando tarea de entrada para camión de distribución',
+        error
+      );
+      processedDistributionEntryKeysRef.current.add(ev.key);
+    }
+  });
+}, [
+  distributionTruckEntryEvents,
+  simTimeSec,
+  actorStates,
+  addTask,
+  setActorStates,
+  formatHM, // si tu linter molesta, puedes quitarlo y poner // eslint-disable-line
+]);
+
+useEffect(() => {
+  if (!distributionTruckExitEvents.length) return;
+  if (!actorStates.length) return;
+
+  distributionTruckExitEvents.forEach(ev => {
+    // ya procesado
+    if (processedDistributionExitKeysRef.current.has(ev.key)) return;
+
+    // todavía no llega la hora de salida (según hora_fin)
+    if (simTimeSec < ev.startAtSec) return;
+
+    // Buscar el actor truckDistribucion correspondiente
+    // Si hubiera varios, se podría matchear por ev.camionId; por ahora,
+    // asumimos un solo camión de distribución
+    const actor =
+      actorStates.find(
+        a =>
+          a.type === 'truckDistribucion' &&
+          (a.id === ev.camionId || !ev.camionId)
+      ) || actorStates.find(a => a.type === 'truckDistribucion');
+
+    if (!actor) {
+      console.warn(
+        '[DistributionTruck Exit] No se encontró actor truckDistribucion para evento',
+        ev
+      );
+      processedDistributionExitKeysRef.current.add(ev.key);
+      return;
+    }
+
+    // Slot actual del camión de distribución (normalmente slot-distribution-2
+    // después de la entrada)
+    const fromSlotId = (actor as any).parkingSlotId as string | undefined;
+
+    // 👇 Solo permitimos salida si efectivamente está en la zona de distribución
+    if (fromSlotId !== 'slot-distribution-2') {
+      // Todavía no ha terminado de entrar → esperamos al próximo tick
+      return;
+    }
+
+    const startSec = Math.max(simTimeSec, ev.startAtSec);
+
+    try {
+      const task = createDistributionExitTaskForTruck(
+        actor.id,
+        actor.type,
+        {
+          // usamos la hora del evento (hora_fin) como startAtSimTime
+          startAtSimTime: formatHM(startSec),
+          fromSlotId,
+          targetSlotId: 'slot-distribution-1',
+        }
+      );
+
+      addTask(task);
+      processedDistributionExitKeysRef.current.add(ev.key);
+
+      console.log(
+        `[DistributionTruck Exit] ✅ Tarea de salida creada para ${actor.id} ` +
+          `desde ${fromSlotId ?? 'desconocido'} hacia slot-distribution-1 ` +
+          `a las ${formatHM(ev.startAtSec)}`
+      );
+    } catch (error) {
+      console.error(
+        '[DistributionTruck Exit] ❌ Error creando tarea de salida para camión de distribución',
+        error
+      );
+      processedDistributionExitKeysRef.current.add(ev.key);
+    }
+  });
+}, [
+  distributionTruckExitEvents,
+  simTimeSec,
+  actorStates,
+  addTask,
+  formatHM,
+]);
+
+
 type TruckMoveEvent = {
   key: string;
   camionId: string;
@@ -482,7 +814,7 @@ type TruckMoveEvent = {
 };
 
 const truckMoveEvents = useMemo<TruckMoveEvent[]>(() => {
-  const linea = backendResponse?.turno_noche?.linea_tiempo_recursos;
+  const linea = backendResponse?.linea_tiempo_recursos;
   if (!Array.isArray(linea)) return [];
 
   const events: TruckMoveEvent[] = [];
@@ -520,7 +852,7 @@ const truckMoveEvents = useMemo<TruckMoveEvent[]>(() => {
 }, [backendResponse, parseHM]);
 
 const truckExitEvents = useMemo<TruckExitEvent[]>(() => {
-  const linea = backendResponse?.turno_noche?.linea_tiempo_recursos;
+  const linea = backendResponse?.linea_tiempo_recursos;
   if (!Array.isArray(linea)) return [];
 
   const events: TruckExitEvent[] = [];
@@ -932,9 +1264,6 @@ useEffect(() => {
 
     const APPROACH_FRACTION = 0.25;
 
-    const startOffset = 5; // segundos
-    const endOffset = -5;  // segundos
-
     for (const ev of craneMovementEvents) {
         if (map[ev.palletId]) continue;
       // Si ya existe una entrada, puedes decidir si sobrescribir solo si este
@@ -1052,11 +1381,8 @@ useEffect(() => {
 
     return safeRoute;
   }
- 
-  const mobileActors = actorStates.filter(a => a.behavior === 'mobile');
-  const stationaryActors = actorStates.filter(a => a.behavior === 'stationary');
 
-  function getTruckNormPositionForPallet(
+function getTruckNormPositionForPallet(
   p: RuntimePallet,
   actorStates: ActorState[]
 ): Point | null {
@@ -1064,7 +1390,9 @@ useEffect(() => {
 
   const actor = actorStates.find(
     (a) =>
-      (a.type === 'truck1' || a.type === 'truck2') &&
+      (a.type === 'truck1' ||
+       a.type === 'truck2' ||
+       a.type === 'truckDistribucion') &&   // 👈 NUEVO
       a.id === p.dropTruckId &&
       a.parkingPosition
   );
@@ -1075,8 +1403,7 @@ useEffect(() => {
     x: actor.parkingPosition.x,
     y: actor.parkingPosition.y,
   };
-}
- 
+} 
 
 const FORKLIFT_ANGLE_OFFSET = 90;
 // 🔹 Movimiento de TODAS las grúas basado en pallets en tránsito (multi-grúa)
@@ -1176,9 +1503,11 @@ useEffect(() => {
       const resourceIdForActor =
         craneActorResourceMapRef.current.get(actor.id) ?? null;
 
-      const pallet = pallets.find(p => {
+                  const pallet = pallets.find(p => {
         if (!p.inTransit) return false;
         if (craneHandledPalletsRef.current.has(p.id)) return false;
+
+        // ya lo está moviendo alguna grúa
         if (
           Array.from(craneMotionsRef.current.values()).some(
             m => m.palletId === p.id
@@ -1187,13 +1516,16 @@ useEffect(() => {
           return false;
         }
 
-        // Debe existir un id_recurso asociado a este pallet en el backend
         const assignedResourceId = palletResourceMap[p.id];
-        if (assignedResourceId == null) return false;
-        if (resourceIdForActor == null) return false;
 
-        // 🔹 La grúa sólo mueve pallets cuyo movimiento pertenece a su id_recurso
-        return assignedResourceId === resourceIdForActor;
+        // 🔹 Caso 1: el pallet está asociado a un id_recurso concreto (backend)
+        if (assignedResourceId != null && resourceIdForActor != null) {
+          return assignedResourceId === resourceIdForActor;
+        }
+
+        // 🔹 Caso 2: pallet SIN mapping (ej: abastecimiento, descarga distribución)
+        //     → lo puede tomar cualquier grúa libre
+        return true;
       });
 
       if (!pallet) {
@@ -1539,8 +1871,6 @@ const visibleActors = actorStates.filter(a => !a.isExited);
                   }
                 }
 
-
-
                 // Posición actual de la grúa (normalizada)
                 const xNorm = actor.parkingPosition?.x ?? 0.5;
                 const yNorm = actor.parkingPosition?.y ?? 0.5;
@@ -1601,28 +1931,7 @@ const visibleActors = actorStates.filter(a => !a.isExited);
           onRouteSelect={handleRouteSelect}
         />
       </div>
-
-      {/* Panel de información de rutas */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 10,
-          right: 10,
-          background: 'white',
-          padding: 10,
-          border: '1px solid #ccc',
-          borderRadius: 8,
-          fontSize: '12px',
-          maxWidth: 280,
-        }}
-      >
-       
-        <div>🚛 Estacionados: {stationaryActors.length}</div>
-        <div>🏃 Móviles: {mobileActors.length}</div>
-        <hr style={{ margin: '8px 0' }} />
-        <div>Hora actual: {formatHM(simTimeSec)}</div>
-        
-      </div>
+      
     </div>
   );
 }

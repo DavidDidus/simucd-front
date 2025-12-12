@@ -9,7 +9,7 @@ export interface PalletSpawnPoint {
     y: number;
     cant_pallets?: number;
   }[];
-  zone: 'mixto' | 'carga' | 'descarga' | 'temporal' | 'completo' | 'espera';
+  zone: 'mixto' | 'carga' | 'descarga' | 'temporal' | 'completo' | 'espera' | 'descarga distribucion';
 }
 export interface RuntimePallet {
   id: string;
@@ -48,27 +48,27 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
     id: 'corridor-1',
     name: 'Pasillo 1',
     slots: [
-        { id: 'c1-slot-1', x: 0.178, y: 0.108, cant_pallets: 10 },
-        { id: 'c1-slot-2', x: 0.178, y: 0.121, cant_pallets: 10 },
-        { id: 'c1-slot-3', x: 0.178, y: 0.133, cant_pallets: 10 },
-        { id: 'c1-slot-4', x: 0.178, y: 0.146, cant_pallets: 10 },
-        { id: 'c1-slot-5', x: 0.178, y: 0.159, cant_pallets: 10 },
-        { id: 'c1-slot-6', x: 0.178, y: 0.172, cant_pallets: 10 },
-        { id: 'c1-slot-7', x: 0.178, y: 0.185, cant_pallets: 10 },
-        { id: 'c1-slot-8', x: 0.178, y: 0.198, cant_pallets: 10 },
-        { id: 'c1-slot-9', x: 0.178, y: 0.211, cant_pallets: 10 },
-        { id: 'c1-slot-10', x: 0.178, y: 0.224, cant_pallets: 10 },
-        { id: 'c1-slot-11', x: 0.178, y: 0.237, cant_pallets: 10 },
-        { id: 'c1-slot-12', x: 0.178, y: 0.250, cant_pallets: 10 },
-        { id: 'c1-slot-13', x: 0.178, y: 0.263, cant_pallets: 10 },
-        { id: 'c1-slot-14', x: 0.178, y: 0.276, cant_pallets: 10 },
-        { id: 'c1-slot-15', x: 0.178, y: 0.289, cant_pallets: 10 },
-        { id: 'c1-slot-16', x: 0.178, y: 0.302, cant_pallets: 10 },
-        { id: 'c1-slot-17', x: 0.178, y: 0.315, cant_pallets: 10 },
-        { id: 'c1-slot-18', x: 0.178, y: 0.328, cant_pallets: 10 },
-        { id: 'c1-slot-19', x: 0.178, y: 0.341, cant_pallets: 10 },
-        { id: 'c1-slot-20', x: 0.178, y: 0.354, cant_pallets: 10 },
-        { id: 'c1-slot-21', x: 0.20, y: 0.1, cant_pallets: 10 },
+        { id: 'c1-slot-1', x: 0.178, y: 0.108, cant_pallets: 0 },
+        { id: 'c1-slot-2', x: 0.178, y: 0.121, cant_pallets: 0 },
+        { id: 'c1-slot-3', x: 0.178, y: 0.133, cant_pallets: 0 },
+        { id: 'c1-slot-4', x: 0.178, y: 0.146, cant_pallets: 0 },
+        { id: 'c1-slot-5', x: 0.178, y: 0.159, cant_pallets: 0 },
+        { id: 'c1-slot-6', x: 0.178, y: 0.172, cant_pallets: 0 },
+        { id: 'c1-slot-7', x: 0.178, y: 0.185, cant_pallets: 0 },
+        { id: 'c1-slot-8', x: 0.178, y: 0.198, cant_pallets: 0 },
+        { id: 'c1-slot-9', x: 0.178, y: 0.211, cant_pallets: 0 },
+        { id: 'c1-slot-10', x: 0.178, y: 0.224, cant_pallets: 0 },
+        { id: 'c1-slot-11', x: 0.178, y: 0.237, cant_pallets: 0 },
+        { id: 'c1-slot-12', x: 0.178, y: 0.250, cant_pallets: 0 },
+        { id: 'c1-slot-13', x: 0.178, y: 0.263, cant_pallets: 0 },
+        { id: 'c1-slot-14', x: 0.178, y: 0.276, cant_pallets: 0 },
+        { id: 'c1-slot-15', x: 0.178, y: 0.289, cant_pallets: 0 },
+        { id: 'c1-slot-16', x: 0.178, y: 0.302, cant_pallets: 0 },
+        { id: 'c1-slot-17', x: 0.178, y: 0.315, cant_pallets: 0 },
+        { id: 'c1-slot-18', x: 0.178, y: 0.328, cant_pallets: 0 },
+        { id: 'c1-slot-19', x: 0.178, y: 0.341, cant_pallets: 0 },
+        { id: 'c1-slot-20', x: 0.178, y: 0.354, cant_pallets: 0 },
+        { id: 'c1-slot-21', x: 0.20, y: 0.1, cant_pallets: 0 },
     ],
     zone: "mixto"
   },
@@ -826,5 +826,40 @@ export const PALLET_SPAWN_POINTS: PalletSpawnPoint[] = [
       { id: 'load-16-slot-16', x: 0.735, y: 0.605, cant_pallets: 0 },
     ],
     zone: "carga"
+  },
+  {
+    id: 'download-distribution-zone',
+    name: 'Zona de descarga y distribución',
+    slots : [
+      { id: 'download-distribution-slot-1', x: 0.630, y: 0.550, cant_pallets: 0 },
+      { id: 'download-distribution-slot-2', x: 0.630, y: 0.565, cant_pallets: 0 },
+      { id: 'download-distribution-slot-3', x: 0.630, y: 0.580, cant_pallets: 0 },
+      { id: 'download-distribution-slot-4', x: 0.630, y: 0.595, cant_pallets: 0 },
+      { id: 'download-distribution-slot-5', x: 0.630, y: 0.610, cant_pallets: 0 },
+      { id: 'download-distribution-slot-6', x: 0.630, y: 0.625, cant_pallets: 0 },
+      { id: 'download-distribution-slot-7', x: 0.630, y: 0.640, cant_pallets: 0 },
+      { id: 'download-distribution-slot-8', x: 0.620, y: 0.550, cant_pallets: 0 },
+      { id: 'download-distribution-slot-9', x: 0.620, y: 0.565, cant_pallets: 0 },
+      { id: 'download-distribution-slot-10', x: 0.620, y: 0.580, cant_pallets: 0 },
+      { id: 'download-distribution-slot-11', x: 0.620, y: 0.595, cant_pallets: 0 },
+      { id: 'download-distribution-slot-12', x: 0.620, y: 0.610, cant_pallets: 0 },
+      { id: 'download-distribution-slot-13', x: 0.620, y: 0.625, cant_pallets: 0 },
+      { id: 'download-distribution-slot-14', x: 0.620, y: 0.640, cant_pallets: 0 },
+      { id: 'download-distribution-slot-15', x: 0.670, y: 0.550, cant_pallets: 0 },
+      { id: 'download-distribution-slot-16', x: 0.670, y: 0.565, cant_pallets: 0 },
+      { id: 'download-distribution-slot-17', x: 0.670, y: 0.580, cant_pallets: 0 },
+      { id: 'download-distribution-slot-18', x: 0.670, y: 0.595, cant_pallets: 0 },
+      { id: 'download-distribution-slot-19', x: 0.670, y: 0.610, cant_pallets: 0 },
+      { id: 'download-distribution-slot-20', x: 0.670, y: 0.625, cant_pallets: 0 },
+      { id: 'download-distribution-slot-21', x: 0.670, y: 0.640, cant_pallets: 0 },
+      { id: 'download-distribution-slot-22', x: 0.680, y: 0.550, cant_pallets: 0 },
+      { id: 'download-distribution-slot-23', x: 0.680, y: 0.565, cant_pallets: 0 },
+      { id: 'download-distribution-slot-24', x: 0.680, y: 0.580, cant_pallets: 0 },
+      { id: 'download-distribution-slot-25', x: 0.680, y: 0.595, cant_pallets: 0 },
+      { id: 'download-distribution-slot-26', x: 0.680, y: 0.610, cant_pallets: 0 },
+      { id: 'download-distribution-slot-27', x: 0.680, y: 0.625, cant_pallets: 0 },
+      { id: 'download-distribution-slot-28', x: 0.680, y: 0.640, cant_pallets: 0 },
+    ],
+    zone: "descarga distribucion"
   }
 ];

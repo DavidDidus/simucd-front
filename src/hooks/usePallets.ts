@@ -17,6 +17,14 @@ export type EventoRecurso = {
   operacion: string;
 };
 
+type DistribucionUnloadEvent = {
+  id: string;
+  startAtSec: number;
+  endAtSec: number;
+  numPallets: number;
+};
+
+
 type ParrilleroEvent = {
   id: string;
   camionId: string;
@@ -62,6 +70,14 @@ type BackendResponseMaybeAxios = {
   [key: string]: any;
 };
 
+type AbastecimientoEvent = {
+  id: string;
+  startAtSec: number;
+  endAtSec: number;
+};
+
+
+
 type CranePalletEvent = {
     id: string;
     palletId: string;
@@ -70,7 +86,7 @@ type CranePalletEvent = {
     startAtSec: number; // cuando empieza a moverlo
     endAtSec: number;   // cuando debería haber llegado
     kind: 'acomodo' | 'despacho';
-    operacion: 'acomodo_pallet' | 'despacho_completo' | 'carga_pallet' | 'acomodo_staging_mixto';
+    operacion: 'acomodo_pallet' | 'despacho_completo' | 'carga_pallet' | 'acomodo_staging_mixto' | "grua_camion_distribucion";
     label: string;
   };
 
@@ -160,6 +176,15 @@ export function usePallets({ backendResponse, simTimeSec, actorStates,craneTrans
   // Para no disparar el mismo evento de parrillero dos veces
   const firedParrilleroEventsRef = useRef<Set<string>>(new Set());
 
+  const firedDistribucionEventsRef = useRef<Set<string>>(new Set());
+  const distribucionSpawnCountsRef = useRef<Record<string, number>>({});
+
+  const firedAbastecimientoEventsRef = useRef<Set<string>>(new Set());
+
+    // Para rastrear qué camiones ya se han retirado y sus pallets eliminados
+  const removedTrucksRef = useRef<Set<string>>(new Set());
+  // Para recordar el último estado de estacionamiento de cada camión
+  const truckParkingStateRef = useRef<Record<string, string | null>>({});
 
   // 1) Normalizar datos del backend (SOLO turno_noche por ahora)
   const { lineaTiempoRecursos, palletToCamionMap } = useMemo(() => {
@@ -175,7 +200,7 @@ export function usePallets({ backendResponse, simTimeSec, actorStates,craneTrans
       root?.turno_noche ?? null;
 
     const linea: EventoRecurso[] =
-      turnoNoche?.linea_tiempo_recursos ?? [];
+      root?.linea_tiempo_recursos ?? [];
 
     const palletMap = buildPalletToCamionMap(
       turnoNoche?.planificacion_detalle
@@ -220,6 +245,133 @@ export function usePallets({ backendResponse, simTimeSec, actorStates,craneTrans
 
     return events;
   }, [lineaTiempoRecursos, palletToCamionMap]);
+
+const distribucionUnloadEvents = useMemo<DistribucionUnloadEvent[]>(() => {
+  const events: DistribucionUnloadEvent[] = [];
+
+  (lineaTiempoRecursos ?? []).forEach((e, idx) => {
+    // 👇 Evento que tú comentaste
+    // recurso: "grua"
+    // label: "descarga_camion_distribucion"
+    if (e.recurso !== 'grua') return;
+    if (String(e.label).toLowerCase() !== 'descarga_camion_distribucion') return;
+    if (!e.hora_comienzo || !e.hora_fin) return;
+
+    const startAtSec = hmToSeconds(e.hora_comienzo);
+    const endAtSec = hmToSeconds(e.hora_fin);
+
+    // 🔹 SIEMPRE queremos 28 pallets en este evento
+    const numPallets = 28;
+
+    events.push({
+      id: `descarga-distrib-${idx}-${e.hora_comienzo}`,
+      startAtSec,
+      endAtSec,
+      numPallets,
+    });
+  });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+  // console.log('[DistribucionUnloadEvents]', events);
+  return events;
+}, [lineaTiempoRecursos]);
+
+const spawnPalletInDownloadDistributionZone = useCallback(
+  (params: { id: string; createdAtSimSec: number; label: string }) => {
+    const zone = PALLET_SPAWN_POINTS.find(
+      (z) => z.id === 'download-distribution-zone'
+    );
+
+    if (!zone) {
+      console.warn(
+        '[usePallets] No se encontró zona "download-distribution-zone" en PALLET_SPAWN_POINTS'
+      );
+      return;
+    }
+
+    if (!zone.slots || zone.slots.length === 0) {
+      console.warn(
+        '[usePallets] "download-distribution-zone" no tiene slots definidos'
+      );
+      return;
+    }
+
+    // 👇 slots ocupados por pallets ya estacionados (no en tránsito)
+    const occupiedSlotIds = new Set(
+      palletsRef.current
+        .filter((p) => p.zoneId === zone.id && !p.inTransit)
+        .map((p) => p.slotId)
+    );
+
+    const emptySlots = zone.slots.filter(
+      (slot) => !occupiedSlotIds.has(slot.id)
+    );
+
+    // PRIORIDAD: vacíos → si no hay, usamos cualquier slot
+    const candidateSlots = emptySlots.length > 0 ? emptySlots : zone.slots;
+    const chosenSlot = candidateSlots[0];
+
+    const newPallet: RuntimePallet = {
+      id: params.id,
+      zoneId: zone.id,
+      slotId: chosenSlot.id,
+      createdAtSimSec: params.createdAtSimSec,
+      label: params.label,
+      camionAsignado: null,
+    };
+
+    setPallets((prev) => [...prev, newPallet]);
+  },
+  []
+);
+
+useEffect(() => {
+  if (!distribucionUnloadEvents.length) return;
+
+  distribucionUnloadEvents.forEach((ev) => {
+    // Aún no empieza la descarga
+    if (simTimeSec < ev.startAtSec) return;
+
+    // Ya marcamos este evento como completamente terminado
+    if (firedDistribucionEventsRef.current.has(ev.id)) return;
+
+    const totalDuration = Math.max(1, ev.endAtSec - ev.startAtSec);
+    const elapsed = Math.min(
+      totalDuration,
+      Math.max(0, simTimeSec - ev.startAtSec)
+    );
+
+    // 👇 cuántos pallets deberíamos haber generado hasta ahora (de 0 a numPallets)
+    const shouldHave = Math.min(
+      ev.numPallets,
+      Math.floor((elapsed / totalDuration) * ev.numPallets)
+    );
+
+    const already = distribucionSpawnCountsRef.current[ev.id] ?? 0;
+    const toSpawn = shouldHave - already;
+
+    if (toSpawn > 0) {
+      for (let i = 0; i < toSpawn; i++) {
+        const seq = already + i + 1;
+        const palletId = `DIST-${ev.id}-P${seq}`;
+
+        spawnPalletInDownloadDistributionZone({
+          id: palletId,
+          createdAtSimSec: simTimeSec,
+          label: `Pallet descarga distribución #${seq}`,
+        });
+      }
+
+      distribucionSpawnCountsRef.current[ev.id] = shouldHave;
+    }
+
+    // Si ya terminó el evento y ya creamos todos los pallets, lo marcamos como finalizado
+    if (simTimeSec >= ev.endAtSec && shouldHave >= ev.numPallets) {
+      firedDistribucionEventsRef.current.add(ev.id);
+    }
+  });
+}, [simTimeSec, distribucionUnloadEvents, spawnPalletInDownloadDistributionZone]);
+
 
     const checkPalletEvents = useMemo<CheckPalletEvent[]>(() => {
     const events = (lineaTiempoRecursos ?? [])
@@ -425,12 +577,63 @@ export function usePallets({ backendResponse, simTimeSec, actorStates,craneTrans
         label: baseLabel,
       });
       return;
+    }if (
+      typeof e.operacion === 'string' &&
+      e.operacion.toLowerCase().includes('grua_camion_distribucion')
+    ) {
+      // Usamos el mismo patrón de palletId que en Simulation2D
+      const palletId =
+        `pallet-distrib-${e.id_recurso}-${e.hora_fin ?? e.hora_comienzo}`;
+
+      events.push({
+        id: `crane-${e.id_recurso}-${e.hora_comienzo}-${palletId}-distrib-carga`,
+        palletId,
+        camionId: null,          // el camión real lo decidimos luego
+        startAtSec,
+        endAtSec,
+        kind: 'despacho',        // 👉 se elimina al final del evento
+        operacion: 'grua_camion_distribucion',
+        label: baseLabel,
+      });
+      return;
     }
   });
 
   events.sort((a, b) => a.startAtSec - b.startAtSec);
   return events;
 }, [lineaTiempoRecursos, palletToCamionMap]);
+
+const abastecimientoEvents = useMemo<AbastecimientoEvent[]>(() => {
+  const events: AbastecimientoEvent[] = [];
+
+  (lineaTiempoRecursos ?? []).forEach((e, idx) => {
+    if (e.recurso !== 'grua') return;
+    if (!e.operacion) return;
+
+    // Operaciones tipo "grua_camion_distribucion-0001_v0"
+    const op = String(e.operacion).toLowerCase();
+    if (!op.includes('grua_camion_distribucion')) return;
+
+    // Label "abastecimiento" (ignoramos mayúsculas / minúsculas)
+    const label = String(e.label ?? '').toLowerCase();
+    if (!label.includes('abastecimiento')) return;
+
+    if (!e.hora_comienzo || !e.hora_fin) return;
+
+    const startAtSec = hmToSeconds(e.hora_comienzo);
+    const endAtSec = hmToSeconds(e.hora_fin);
+
+    events.push({
+      id: `abastecimiento-${idx}-${e.hora_comienzo}`,
+      startAtSec,
+      endAtSec,
+    });
+  });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+  return events;
+}, [lineaTiempoRecursos]);
+
 
   // 4) Función para generar un pallet en temporary-zone en un slot aleatorio
   const spawnPalletInTemporaryZone = useCallback(
@@ -508,7 +711,7 @@ export function usePallets({ backendResponse, simTimeSec, actorStates,craneTrans
     );
 
     // 👇 Si es un despacho de pallet completo y aún no existe, lo creamos en zona "completo"
-    if (!runtimePallet && ev.kind === 'despacho' && ev.operacion === 'despacho_completo') {
+    if (!runtimePallet && ev.kind === 'despacho' &&( ev.operacion === 'despacho_completo' || ev.operacion === 'grua_camion_distribucion')) {
       const completeZone = PALLET_SPAWN_POINTS.find(
         (z) => z.zone === 'completo'
       );
@@ -603,7 +806,29 @@ export function usePallets({ backendResponse, simTimeSec, actorStates,craneTrans
       targetZoneId = 'await-zone';
       dropOnTruck = false;
       dropTruckId = null;
-    } else {
+    } else if (ev.operacion === 'grua_camion_distribucion') {
+      // 👉 carga del camión de abastecimiento/distribución
+      if (!actorStates) {
+        return;
+      }
+
+      const distribTruck = actorStates.find(
+        (a) => a.type === 'truckDistribucion'
+      );
+
+      if (!distribTruck) {
+        // el camión aún no existe / no ha entrado → reintentar más tarde
+        return;
+      }
+
+      // Para path de pallets usamos la misma zona en la que está (completo);
+      // la ruta real hacia el camión la calcula la grúa en Simulation2D
+      targetZoneId = runtimePallet.zoneId;
+
+      dropOnTruck = true;
+      dropTruckId = distribTruck.id;
+    }
+    else {
       // 👉 resto de operaciones sigue la lógica actual basada en camión
       const camionId =
         runtimePallet.camionAsignado ?? ev.camionId ?? null;
@@ -801,6 +1026,172 @@ useEffect(() => {
   });
 }, [simTimeSec, parrilleroEvents, actorStates, setPallets]);
 
+useEffect(() => {
+  if (!abastecimientoEvents.length) return;
+
+  abastecimientoEvents.forEach(ev => {
+    if (firedAbastecimientoEventsRef.current.has(ev.id)) return;
+
+    // Solo programamos cuando ya empezó el evento (o justo al empezar)
+    if (simTimeSec < ev.startAtSec) return;
+
+    setPallets(prev => {
+      const completoZone = PALLET_SPAWN_POINTS.find(
+        (z) => z.zone === 'completo'
+      );
+      if (!completoZone || !completoZone.slots?.length) {
+        console.warn(
+          '[usePallets] No se encontró zona "completo" para abastecimiento'
+        );
+        firedAbastecimientoEventsRef.current.add(ev.id);
+        return prev;
+      }
+
+      // Pallets elegibles: en zona de descarga distribucion, en el piso, sin tránsito programado aún
+      const candidates = prev
+        .map((p, idx) => ({ p, idx }))
+        .filter(({ p }) =>
+          p.zoneId === 'download-distribution-zone' &&
+          !p.inTransit &&
+          !p.transitStartSimSec &&  // aún no programado
+          !p.transitEndSimSec
+        );
+
+      if (!candidates.length) {
+        // ❌ No hay pallets aún: seguimos intentando en ticks futuros.
+        // ✅ Solo marcamos como terminado si ya pasó la ventana del evento.
+        if (simTimeSec >= ev.endAtSec) {
+          firedAbastecimientoEventsRef.current.add(ev.id);
+        }
+        return prev;
+      }
+
+      const durationSec = Math.max(5, ev.endAtSec - ev.startAtSec);
+      const perPalletSec = durationSec / candidates.length;
+
+      // Slots ya ocupados en COMPLETO (no en tránsito)
+      const occupiedSlotIds = new Set(
+        prev
+          .filter((p) => p.zoneId === completoZone.id && !p.inTransit)
+          .map((p) => p.slotId)
+      );
+
+      const next = [...prev];
+
+      // 👉 Programamos los pallets UNO POR UNO, ventanas consecutivas
+      candidates.forEach(({ p, idx: palletIdx }, candidateIdx) => {
+        const start = ev.startAtSec + candidateIdx * perPalletSec;
+        const end = ev.startAtSec + (candidateIdx + 1) * perPalletSec;
+
+        const emptySlots = completoZone.slots.filter(
+          (slot) => !occupiedSlotIds.has(slot.id)
+        );
+        const candidateSlots =
+          emptySlots.length > 0 ? emptySlots : completoZone.slots;
+
+        const chosenSlot =
+          candidateSlots[
+            Math.floor(Math.random() * candidateSlots.length)
+          ];
+
+        occupiedSlotIds.add(chosenSlot.id);
+
+        const fromPos = getSlotNormPosition(p.zoneId, p.slotId);
+        const toPos = getSlotNormPosition(completoZone.id, chosenSlot.id);
+
+        const path = aStarPathfinding(
+          fromPos,
+          toPos,
+          PREDEFINED_OBSTACLES
+        );
+
+        const pathNorm: Point[] =
+          path && path.length > 1 ? path : [fromPos, toPos];
+
+        // 👇 Usar palletIdx (índice real en el array next) en lugar de idx
+        next[palletIdx] = {
+          ...p,
+          // 👇 OJO: aquí **NO** activamos inTransit todavía
+          fromZoneId: p.zoneId,
+          fromSlotId: p.slotId,
+          toZoneId: completoZone.id,
+          toSlotId: chosenSlot.id,
+          transitStartSimSec: start,
+          transitEndSimSec: end,
+          pathNorm,
+          dropOnTruck: false,
+          dropTruckId: null,
+        } as RuntimePallet;
+      });
+
+      firedAbastecimientoEventsRef.current.add(ev.id);
+      return next;
+    });
+  });
+}, [simTimeSec, abastecimientoEvents]);
+
+useEffect(() => {
+  setPallets(prev => {
+    let changed = false;
+
+    const next = prev.map(p => {
+      if (p.inTransit) return p;
+
+      if (
+        p.transitStartSimSec != null &&
+        p.transitEndSimSec != null &&
+        simTimeSec >= p.transitStartSimSec &&
+        simTimeSec < p.transitEndSimSec
+      ) {
+        changed = true;
+        return {
+          ...p,
+          inTransit: true,
+        };
+      }
+
+      return p;
+    });
+
+    return changed ? next : prev;
+  });
+}, [simTimeSec]);
+
+useEffect(() => {
+  setPallets(prev => {
+    let changed = false;
+
+    const next = prev.map(p => {
+      if (!p.inTransit) return p;
+      if (p.transitEndSimSec == null) return p;
+      if (simTimeSec < p.transitEndSimSec) return p;
+
+      const finalZoneId = p.toZoneId ?? p.zoneId;
+      const finalSlotId = p.toSlotId ?? p.slotId;
+
+      changed = true;
+
+      return {
+        ...p,
+        zoneId: finalZoneId!,
+        slotId: finalSlotId!,
+        inTransit: false,
+        fromZoneId: undefined,
+        fromSlotId: undefined,
+        toZoneId: undefined,
+        toSlotId: undefined,
+        transitStartSimSec: undefined,
+        transitEndSimSec: undefined,
+        pathNorm: undefined,
+        dropOnTruck: undefined,
+        dropTruckId: undefined,
+      };
+    });
+
+    return changed ? next : prev;
+  });
+}, [simTimeSec]);
+
 
   // 6) Mapa slotId -> cantidad de pallets (para el layer)
   // Función auxiliar: obtener la posición (normalizada) de un slot
@@ -874,6 +1265,38 @@ const palletCountsBySlot = useMemo(() => {
   return map;
 }, [palletsWithPosition]);
 
+  // 8) Efecto: Cuando un camión se retira, eliminar todos sus pallets de la load-zone
+  useEffect(() => {
+    if (!actorStates) return;
+
+    const trucks = actorStates.filter(
+      (a) => a.type === 'truck1' || a.type === 'truck2' || a.type === 'truck3' || a.type === 'truck4' || a.type === 'truckT1'
+    );
+
+    trucks.forEach((truck) => {
+      const truckId = truck.id;
+      const currentParkingSlotId = (truck as any).parkingSlotId as string | null | undefined;
+      const wasParked = truckParkingStateRef.current[truckId];
+
+      // Detectar si el camión se acaba de retirar: antes estaba en un slot, ahora no
+      if (wasParked && !currentParkingSlotId) {
+        // El camión se retiró → eliminar todos sus pallets
+        if (!removedTrucksRef.current.has(truckId)) {
+          setPallets((prev) => {
+            const filtered = prev.filter(
+              (p) => p.camionAsignado !== truckId
+            );
+            return filtered;
+          });
+
+          removedTrucksRef.current.add(truckId);
+        }
+      }
+
+      // Actualizar el estado actual del camión
+      truckParkingStateRef.current[truckId] = currentParkingSlotId ?? null;
+    });
+  }, [actorStates]);
 
 
 

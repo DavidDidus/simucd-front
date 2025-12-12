@@ -111,7 +111,27 @@ export const PARKING_ZONES: ParkingZone[] = [
       occupied: false,
     },
   ],
-  allowedTypes: ['truck1', 'truck2'],
+  allowedTypes: ['truck1', 'truck2', 'truckDistribucion'],
 },
-
+{
+    id: 'zone-parking-distribution',
+    name: 'Zona parking Distribución',
+    slots: [
+        { id: 'slot-distribution-1', x: 0.340, y: 0.999, rotation: 180, occupied: false },
+        { id: 'slot-distribution-2', x: 0.615, y: 0.590, rotation: 180, occupied: false },
+    ],
+    allowedTypes: ['truckDistribucion']
+},
+{
+    id: 'zone-load-download-t1-t2',
+    name: 'Zona carga/descarga T1 y T2',
+    slots: [
+        { id: 'slot-t1-t2-1', x: 0.175, y: 0.525, rotation: 0, occupied: false },
+        { id: 'slot-t1-t2-2', x: 0.249, y: 0.560, rotation: 0, occupied: false },
+        { id: 'slot-t1-t2-3', x: 0.542, y: 0.595, rotation: 0, occupied: false },
+        { id: 'slot-t1-t2-4', x: 0.685, y: 0.580, rotation: 0, occupied: false },
+        { id: 'slot-t1-t2-5', x: 0.685, y: 0.730, rotation: 0, occupied: false },
+      ],
+    allowedTypes: ['truck1', 'truckT1']
+}
 ];

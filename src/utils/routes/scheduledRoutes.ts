@@ -1,5 +1,5 @@
 import type { PredefinedRoute } from './routes';
-import { PREDEFINED_ROUTES } from './routes';
+import { PARKING_ZONES } from '../../types/parkingSlot';
 import { findTransitionPath } from './pathfinding';
 import type { Point } from '../../types';
 import type { PredefinedObstacle } from '../../types/obstacles';
@@ -72,6 +72,92 @@ export const LOAD_TO_ROUTE_MAP: Record<string, string> = {
   'slot-load-15': 'route-patio-15-loading',
   'slot-load-16': 'route-patio-16-loading',
 };
+
+export const DISTRIBUTION_ROUTE_MAP: Record<string, string> = {
+  'slot-distribution-1': 'route-distribution-truck',
+  'slot-distribution-2': 'route-distribution-truck', // o la ruta específica si tienes otra
+};
+
+function findNearestLoadRouteFromSlot(
+  slotId: string
+): { loadSlotId: string; routeId: string } | undefined {
+  // Buscamos el slot de origen (puede ser slot-distribution-1 o 2)
+  const allSlots = PARKING_ZONES.flatMap(z => z.slots);
+  const fromSlot = allSlots.find(s => s.id === slotId);
+
+  if (!fromSlot) return undefined;
+
+  let best:
+    | { loadSlotId: string; routeId: string; dist2: number }
+    | undefined;
+
+  for (const zone of PARKING_ZONES) {
+    for (const slot of zone.slots) {
+      // solo slots de carga
+      if (!slot.id.startsWith('slot-load-')) continue;
+
+      const routeId = LOAD_TO_ROUTE_MAP[slot.id];
+      if (!routeId) continue;
+
+      const dx = slot.x - fromSlot.x;
+      const dy = slot.y - fromSlot.y;
+      const dist2 = dx * dx + dy * dy;
+
+      if (!best || dist2 < best.dist2) {
+        best = {
+          loadSlotId: slot.id,
+          routeId,
+          dist2,
+        };
+      }
+    }
+  }
+
+  if (!best) return undefined;
+  return { loadSlotId: best.loadSlotId, routeId: best.routeId };
+}
+
+export function createDistributionExitTaskForTruck(
+  truckId: string,
+  actorType: string,
+  options?: {
+    startAtSimTime?: string;
+    priority?: number;
+    dependsOn?: string[];
+    fromSlotId?: string;   // slot actual del camión (normalmente slot-distribution-2)
+    targetSlotId?: string; // a dónde queremos llegar visualmente (slot-distribution-1)
+  }
+): SimTask {
+  const fromSlotId = options?.fromSlotId ?? 'slot-distribution-2';
+  const targetSlotId = options?.targetSlotId ?? 'slot-distribution-1';
+
+  const routeId = 'route-salida-distribucion';
+
+  const taskId = `followRouteDistributionExit:${truckId}:${fromSlotId}:${Date.now()}`;
+
+  return createBaseTask({
+    id: taskId,
+    actorId: truckId,
+    actorType,
+    type: 'followRoute',
+    priority: options?.priority ?? 1,
+    startAtSimTime:
+      options?.startAtSimTime !== undefined
+        ? parseHM(options.startAtSimTime)
+        : undefined,
+    dependsOn: options?.dependsOn,
+    payload: {
+      routeId,
+      targetZone: 'zone-exit',   // 👈 igual que los camiones normales para que el engine lo pueda "sacar"
+      targetSlotId,              // 👈 visualmente queremos terminar en slot-distribution-1
+    },
+  });
+}
+
+
+export function getRouteIdForDistributionSlot(slotId: string): string | undefined {
+  return DISTRIBUTION_ROUTE_MAP[slotId];
+}
 
 /**
  * Helper para obtener el routeId asociado a un parkingSlotId.
@@ -183,43 +269,44 @@ export function createFollowRouteTaskFromLoadSlot(
   });
 }
 
-
-
-export const ROUTE_SCHEDULE: ScheduledRoute[] = [
-  {
-    routeId: PREDEFINED_ROUTES[0]?.id || 'fallback',
-    startTime: "00:00"
-  },
-  {
-    routeId: PREDEFINED_ROUTES[1]?.id || 'fallback',
-    startTime: "00:02"
-  },
-  {
-    routeId: PREDEFINED_ROUTES[2]?.id || 'fallback',
-    startTime: "12:00"
+export function createDistributionEntryTaskForTruck(
+  truckId: string,
+  actorType: string,
+  options?: {
+    startAtSimTime?: string;
+    priority?: number;
+    dependsOn?: string[];
+    targetSlotId?: string;
   }
-];
+): SimTask {
+  // por defecto mandamos al slot-distribution-2
+  const targetSlotId = options?.targetSlotId ?? 'slot-distribution-2';
 
+  const routeId =
+    getRouteIdForDistributionSlot(targetSlotId) ??
+    'route-distribution-truck';
 
+  const taskId = `followRouteDistribution:${truckId}:${targetSlotId}:${Date.now()}`;
 
-export function getActiveScheduledRoute(simTimeSec: number): { route: PredefinedRoute; schedule: ScheduledRoute } {
-  const sortedSchedule = [...ROUTE_SCHEDULE].sort((a, b) => 
-    parseHM(a.startTime) - parseHM(b.startTime)
-  );
-
-  let activeSchedule = sortedSchedule[0];
-  
-  for (const schedule of sortedSchedule) {
-    const routeStartSec = parseHM(schedule.startTime);
-    if (simTimeSec >= routeStartSec) {
-      activeSchedule = schedule;
-    }
-  }
-
-  const route = PREDEFINED_ROUTES.find(r => r.id === activeSchedule.routeId) || PREDEFINED_ROUTES[0];
-
-  return { route, schedule: activeSchedule };
+  return createBaseTask({
+    id: taskId,
+    actorId: truckId,
+    actorType,
+    type: 'followRoute',
+    priority: options?.priority ?? 1,
+    startAtSimTime:
+      options?.startAtSimTime !== undefined
+        ? parseHM(options.startAtSimTime)
+        : undefined,
+    dependsOn: options?.dependsOn,
+    payload: {
+      routeId,
+      targetZone: 'zone-parking-distribution', // 👈 llega a esa zona
+      targetSlotId,                            // 👈 específicamente a slot-distribution-2
+    },
+  });
 }
+
 
 // 🆕 Función actualizada para crear transición hacia el inicio de la ruta
 export function createRouteTransition(
@@ -249,13 +336,6 @@ export function createRouteTransition(
   };
 }
 
-
-export function getScheduleWithRouteDetails(): Array<{ schedule: ScheduledRoute; route: PredefinedRoute }> {
-  return ROUTE_SCHEDULE.map(schedule => {
-    const route = PREDEFINED_ROUTES.find(r => r.id === schedule.routeId) || PREDEFINED_ROUTES[0];
-    return { schedule, route };
-  });
-}
 
 export function createExitRouteTaskForTruck(
   truckId: string,
