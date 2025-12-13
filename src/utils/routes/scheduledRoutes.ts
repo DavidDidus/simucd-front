@@ -307,6 +307,85 @@ export function createDistributionEntryTaskForTruck(
   });
 }
 
+export const T1_CHECK_TO_ROUTE_MAP: Record<string, string> = {
+  'slot-check-t1-1': 'route-t1-check-1',
+};
+
+export function getRouteIdForT1CheckSlot(slotId: string) {
+  return T1_CHECK_TO_ROUTE_MAP[slotId];
+}
+export function createT1GoToCheckTask(
+  truckId: string,
+  actorType: string,
+  options: { startAtSimTime?: string; targetSlotId?: string; dependsOn?: string[] }
+): SimTask {
+  const targetSlotId = options.targetSlotId ?? 'slot-check-t1-1';
+  const routeId = getRouteIdForT1CheckSlot(targetSlotId);
+  if (!routeId) throw new Error(`[T1] No route for check slot ${targetSlotId}`);
+
+  return createBaseTask({
+    id: `t1:goCheck:${truckId}:${Date.now()}`,
+    actorId: truckId,
+    actorType,
+    type: 'followRoute',
+    startAtSimTime: options.startAtSimTime ? parseHM(options.startAtSimTime) : undefined,
+    dependsOn: options.dependsOn,
+    payload: {
+      routeId,
+      targetZone: 'zone-check-t1',
+      targetSlotId,
+    },
+  });
+}
+
+export function createWaitTask(
+  actorId: string,
+  actorType: string,
+  options: { dependsOn?: string[]; durationSec: number }
+): SimTask {
+  return createBaseTask({
+    id: `wait:${actorId}:${Date.now()}`,
+    actorId,
+    actorType,
+    type: 'wait',
+    priority: 1,
+    dependsOn: options.dependsOn,
+    payloadExtra: { durationSec: options.durationSec },
+  });
+}
+
+export function createT1EntryTaskForTruck(
+  truckId: string,
+  actorType: string,
+  options?: {
+    startAtSimTime?: string;
+    priority?: number;
+    dependsOn?: string[];
+  }
+): SimTask {
+  const routeId = 'route-t1t2-entry'; // 👈 una ruta que termine cerca de la zona
+
+  const taskId = `followRouteT1Zone:${truckId}:${Date.now()}`;
+
+  return createBaseTask({
+    id: taskId,
+    actorId: truckId,
+    actorType,
+    type: 'followRoute',
+    priority: options?.priority ?? 1,
+    startAtSimTime:
+      options?.startAtSimTime !== undefined
+        ? parseHM(options.startAtSimTime)
+        : undefined,
+    dependsOn: options?.dependsOn,
+    payload: {
+      routeId,
+      targetZone: 'zone-load-download-t1-t2', // 👈 CLAVE
+      // 👇 sin targetSlotId
+    },
+  });
+}
+
 
 // 🆕 Función actualizada para crear transición hacia el inicio de la ruta
 export function createRouteTransition(

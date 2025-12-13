@@ -6,6 +6,8 @@ export type SimTaskStatus = 'pending' | 'running' | 'completed' | 'cancelled' | 
 // Tipo de tarea (podemos extender con más strings específicos)
 export type SimTaskType = 'followRoute' | 'moveToPoint' | 'wait' | 'craneMoveWithPallet' | string;
 
+type WaitPayload = { durationSec: number };
+
 // Payload genérico de una tarea.
 // Se puede extender más adelante con campos específicos por tipo.
 export interface SimTaskPayload {
@@ -42,6 +44,7 @@ export interface SimTask {
 
   // Datos específicos del tipo de tarea
   payload?: SimTaskPayload;
+  
 
   // (Opcional) timestamp de creación para desempate, si quieres
   createdAtSimTime?: number;
@@ -57,6 +60,7 @@ export interface CreateBaseTaskParams {
   startAtSimTime?: number;
   dependsOn?: string[];
   payload?: SimTaskPayload;
+  payloadExtra?: WaitPayload;
   createdAtSimTime?: number;
 }
 

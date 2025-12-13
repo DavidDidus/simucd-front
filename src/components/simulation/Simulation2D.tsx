@@ -16,7 +16,10 @@ import { useRoute } from '../../hooks/useRoute';
 import { useObstacle } from '../../hooks/useObstacle';
 import { PREDEFINED_OBSTACLES } from '../../utils/routes/obstacles';
 import { aStarPathfinding } from '../../utils/routes/pathfinding';
-import { createFollowRouteTaskForTruck, createFollowRouteTaskFromLoadSlot , createExitRouteTaskForTruck, createDistributionEntryTaskForTruck, createDistributionExitTaskForTruck } from '../../utils/routes/scheduledRoutes';
+import { createFollowRouteTaskForTruck, createFollowRouteTaskFromLoadSlot , createExitRouteTaskForTruck, createDistributionEntryTaskForTruck, createDistributionExitTaskForTruck, createT1GoToCheckTask,
+  createWaitTask,
+    createT1EntryTaskForTruck,
+} from '../../utils/routes/scheduledRoutes';
 import { usePallets, type EventoRecurso } from '../../hooks/usePallets';
 import { PalletsLayer } from './layers/PalletsLayer';
 import { PARKING_ZONES } from '../../types/parkingSlot';
@@ -81,6 +84,12 @@ type DistributionTruckExitEvent = {
   endAtSec: number;
 };
 
+type T1TruckEntryEvent = {
+  key: string;
+  camionId: string;
+  startAtSec: number;
+};
+
 type Props = {
   running?: boolean;
   resources?: Partial<ShiftResources>;
@@ -117,6 +126,21 @@ type TruckExitMotion = {
   endSec: number;
   path: Point[];
 };
+
+function pickFreeSlotT1T2(actorStates: ActorState[]): string | undefined {
+  const zone = PARKING_ZONES.find(z => z.id === 'zone-load-download-t1-t2');
+  const slots = zone?.slots ?? [];
+  if (!slots.length) return undefined;
+
+  const occupied = new Set(
+    actorStates
+      .filter(a => !a.isExited && a.parkingSlotId)
+      .map(a => a.parkingSlotId as string)
+  );
+
+  return slots.map(s => s.id).find(id => !occupied.has(id));
+}
+
 
 
 const toUrl = (m: any) => (typeof m === 'string' ? m : m?.src || '');
@@ -221,6 +245,8 @@ const distributionTruckInitializedRef = useRef(false);
 
 const processedDistributionEntryKeysRef = useRef<Set<string>>(new Set());
 const processedDistributionExitKeysRef = useRef<Set<string>>(new Set());
+const t1TruckInitializedRef = useRef(false);
+const processedT1EntryKeysRef = useRef<Set<string>>(new Set());
 
   // Recursos por turno (UI)
   const [resources, setResources] = useState<ShiftResources>({
@@ -374,7 +400,29 @@ const truckIdsFromBackend = useMemo(() => {
   return ids;
 }, [backendResponse]);
 
+  const truckT1IdsFromBackend = useMemo(() => {
+  if (!backendResponse) return [];
 
+  const root: any = (backendResponse as any).data ?? backendResponse;
+  const linea: EventoRecurso[] | undefined = root?.linea_tiempo_recursos;
+  if (!Array.isArray(linea)) return [];
+
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  linea.forEach((e: any) => {
+    if (e?.recurso !== 'camion_t1') return;
+    const id = String(e.id_recurso ?? '');
+    if (!id) return;
+
+    if (!seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+  });
+
+  return ids;
+}, [backendResponse]);
 
    const craneResourceIds = useMemo(() => {
     const linea = backendResponse?.linea_tiempo_recursos;
@@ -410,7 +458,7 @@ const actorCounts = useMemo<Record<ActorType, number>>(
       truck2: 0,
       truck3: 0,
       truck4: 0,
-      truckT1: 0,
+      truckT1: truckT1IdsFromBackend.length || 1,
       truckDistribucion: 1,
       crane1: craneCount,
     };
@@ -435,6 +483,7 @@ const actorCounts = useMemo<Record<ActorType, number>>(
     stageWidth: stageDims.w,
     stageHeight: stageDims.h,
     truckIdsFromBackend,
+    truckT1IdsFromBackend
   });
 
     // 🔹 Tipo local: evento de movimiento de pallet manejado por una grúa concreta
@@ -610,7 +659,6 @@ const distributionTruckExitEvents = useMemo<DistributionTruckExitEvent[]>(() => 
   console.log('[DistributionTruck] eventos de salida parseados:', events);
   return events;
 }, [backendResponse]);
-
 
 useEffect(() => {
   if (distributionTruckInitializedRef.current) return;
@@ -804,6 +852,142 @@ useEffect(() => {
   addTask,
   formatHM,
 ]);
+
+const t1TruckEntryEvents = useMemo<T1TruckEntryEvent[]>(() => {
+  const root: any = (backendResponse as any)?.data ?? backendResponse;
+  const linea: EventoRecurso[] | undefined = root?.linea_tiempo_recursos;
+  if (!Array.isArray(linea)) return [];
+
+  const events: T1TruckEntryEvent[] = [];
+
+  linea.forEach((e: any, idx: number) => {
+    if (e?.recurso !== 'camion_t1') return;
+    if (typeof e?.hora_comienzo !== 'string') return;
+
+    const label = String(e.label ?? '').toLowerCase();
+    if (!label.includes('entrada')) return;
+
+    const camionId = String(e.id_recurso ?? `T1-${idx}`);
+    const startAtSec = parseHM(e.hora_comienzo);
+    const key = `t1-entry-${camionId}-${e.hora_comienzo}-${idx}`;
+
+    events.push({ key, camionId, startAtSec });
+  });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+  return events;
+}, [backendResponse]);
+
+useEffect(() => {
+  if (t1TruckInitializedRef.current) return;
+  if (!actorStates.length) return;
+
+  const exitSlot = getParkingSlotById('slot-exit-t1-1'); 
+
+  setActorStates(prev =>
+    prev.map(a => {
+      if (a.type !== 'truckT1') return a;
+
+      let parkingPosition = a.parkingPosition;
+      let parkingSlotId = (a as any).parkingSlotId as string | undefined;
+
+      if (exitSlot) {
+        parkingPosition = { x: exitSlot.x, y: exitSlot.y, rotation: exitSlot.rotation };
+        parkingSlotId = exitSlot.id;
+      }
+
+      return {
+        ...a,
+        isExited: true,
+        parkingPosition,
+        parkingSlotId,
+      };
+    })
+  );
+
+  t1TruckInitializedRef.current = true;
+}, [actorStates.length, setActorStates]);
+
+useEffect(() => {
+  if (!t1TruckEntryEvents.length) return;
+  if (!actorStates.length) return;
+
+  t1TruckEntryEvents.forEach(ev => {
+    if (processedT1EntryKeysRef.current.has(ev.key)) return;
+    if (simTimeSec < ev.startAtSec) return;
+
+    // Busca el actor T1 con el mismo id del backend
+    const actor = actorStates.find(a => a.type === 'truckT1' && a.id === ev.camionId)
+      ?? actorStates.find(a => a.type === 'truckT1');
+
+    if (!actor) {
+      processedT1EntryKeysRef.current.add(ev.key);
+      return;
+    }
+
+    // 1) Visible
+    setActorStates(prev =>
+      prev.map(a => (a.id === actor.id ? { ...a, isExited: false } : a))
+    );
+
+    // 2) Tarea de entrada (reusamos la función de distribución)
+    try {
+  // (A) elegir slot final libre en zone-load-download-t1-t2
+ const checkSec = t1CheckDurationByTruckId.get(ev.camionId) ?? 0;
+
+// 1) ir a checkpoint
+const goCheck = createT1GoToCheckTask(actor.id, actor.type, {
+  startAtSimTime: formatHM(ev.startAtSec),
+  targetSlotId: 'slot-check-t1-1',
+});
+addTask(goCheck);
+
+// 2) esperar chequeo (empieza cuando llega)
+const wait = createWaitTask(actor.id, actor.type, {
+  dependsOn: [goCheck.id],
+  durationSec: checkSec,
+});
+addTask(wait);
+
+// 3) ir a zona t1/t2 (SIN slot fijo)
+const goZone = createT1EntryTaskForTruck(actor.id, actor.type, {
+  dependsOn: [wait.id],
+  // 👇 no targetSlotId
+});
+addTask(goZone);
+
+processedT1EntryKeysRef.current.add(ev.key);
+
+} catch (err) {
+  console.error('[T1] Error creando cadena de tareas', err);
+  processedT1EntryKeysRef.current.add(ev.key);
+}
+
+  });
+}, [t1TruckEntryEvents, simTimeSec, actorStates, addTask, setActorStates, formatHM]);
+
+const t1CheckDurationByTruckId = useMemo(() => {
+  const root: any = (backendResponse as any)?.data ?? backendResponse;
+  const linea: EventoRecurso[] | undefined = root?.linea_tiempo_recursos;
+  if (!Array.isArray(linea)) return new Map<string, number>();
+
+  const map = new Map<string, number>();
+
+  linea.forEach((e: any) => {
+    if (e?.recurso !== 'chequeador') return;
+    if (typeof e?.label !== 'string') return;
+
+    const m = e.label.match(/camion_(T1-[A-Za-z0-9_-]+)/i);
+    const camionId = m?.[1];
+    if (!camionId) return;
+
+    const durationSec = Math.max(0, (e.duracion_min ?? 0) * 60);
+    map.set(camionId, durationSec);
+  });
+
+  return map;
+}, [backendResponse]);
+
 
 
 type TruckMoveEvent = {

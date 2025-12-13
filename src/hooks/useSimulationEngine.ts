@@ -27,6 +27,7 @@ type UseSimulationEngineParams = {
   stageWidth: number;
   stageHeight: number;
   truckIdsFromBackend?: string[];
+  truckT1IdsFromBackend?: string[];
 };
 
 type UseSimulationEngineResult = {
@@ -47,7 +48,7 @@ type UseSimulationEngineResult = {
 export function useSimulationEngine(
   params: UseSimulationEngineParams
 ): UseSimulationEngineResult {
-  const { running, editing, actorCounts, initialRouteId, stageWidth, stageHeight, truckIdsFromBackend } = params;
+  const { running, editing, actorCounts, initialRouteId, stageWidth, stageHeight, truckIdsFromBackend, truckT1IdsFromBackend } = params;
 
   // 👉 Imágenes + estados de actores
   const { actors, loading: actorsLoading } = useActorImages(actorCounts);
@@ -56,7 +57,8 @@ export function useSimulationEngine(
     actorsLoading,
     actorCounts,
     initialRouteId,
-    truckIdsFromBackend
+    truckIdsFromBackend,
+    truckT1IdsFromBackend
   );
 
   // Tiempo de simulación
@@ -178,9 +180,54 @@ export function useSimulationEngine(
               t.type === 'followRoute'
           );
 
+          const runningWaitTask = tasks.find(
+            t =>
+              t.actorId === actor.id &&
+              t.status === 'running' &&
+              t.type === 'wait'
+          );
+
+          // 🟡 WAIT en ejecución → comprobar si terminó
+if (runningWaitTask) {
+  const started = (runningWaitTask as any).startedAtSimTime;
+  const durationSec =
+    (runningWaitTask as any).payloadExtra?.durationSec ??
+    (runningWaitTask as any).payload?.durationSec ??
+    0;
+
+  if (
+    typeof started === 'number' &&
+    logicalSimTime >= started + durationSec
+  ) {
+    updateTaskStatus(runningWaitTask.id, 'completed');
+  }
+
+  // mientras espera, no hace nada más
+  return actor;
+}
+
+
           // 1) Arrancar tarea si no tiene transición ni tarea en curso
           if (!hasTransition && !hasRunningTask) {
             const nextTask = getNextTaskForActor(actor.id, logicalSimTime);
+            
+            if (nextTask && nextTask.type === 'wait') {
+              updateTaskStatus(nextTask.id, 'running');
+
+              // guardamos cuándo empezó este wait (en tiempo sim)
+              setTasks(prev =>
+                prev.map(t =>
+                  t.id === nextTask.id
+                    ? {
+                        ...t,
+                        startedAtSimTime: logicalSimTime,
+                      }
+                    : t
+                )
+              );
+
+              return actor; // se queda quieto mientras espera
+            }
 
             if (
               nextTask &&
@@ -190,33 +237,32 @@ export function useSimulationEngine(
               const targetZone =
                 (nextTask as any).payload?.targetZone ?? 'zone-load';
               
-              
-const targetRouteId = nextTask.payload.routeId;
-const targetRoute = PREDEFINED_ROUTES.find(
-  r => r.id === targetRouteId
-);
+                const targetRouteId = nextTask.payload.routeId;
+                const targetRoute = PREDEFINED_ROUTES.find(
+                  r => r.id === targetRouteId
+                );
 
-if (!targetRoute) {
-  console.warn(
-    `[Engine] ❌ No se encontró targetRoute "${targetRouteId}" para actor ${actor.id}. Marcando tarea como completada para evitar loop.`
-  );
+                if (!targetRoute) {
+                  console.warn(
+                    `[Engine] ❌ No se encontró targetRoute "${targetRouteId}" para actor ${actor.id}. Marcando tarea como completada para evitar loop.`
+                  );
 
-  // Evita que la tarea se siga intentando en cada tick
-  updateTaskStatus(nextTask.id, 'completed');
-  return actor;
-}
-
+                  // Evita que la tarea se siga intentando en cada tick
+                  updateTaskStatus(nextTask.id, 'completed');
+                  return actor;
+                }
 
               // 🆕 Si la tarea es "volver al parking" o "salir del patio", liberamos su slot
-              if (
-                (targetZone === 'zone-parking' || targetZone === 'zone-exit') &&
-                actor.parkingSlotId
-              ) {
-                console.log(
-                  `🚛 ${actor.id} saliendo de slot ${actor.parkingSlotId} hacia ${targetZone}`
-                );
-                releaseSlot(actor.parkingSlotId);
+              // 🔓 liberar slot actual si el actor va a cambiar de zona/slot
+              if (actor.parkingSlotId) {
+                const nextTargetSlotId =
+                  (nextTask as any).payload?.targetSlotId;
+
+                if (!nextTargetSlotId || nextTargetSlotId !== actor.parkingSlotId) {
+                  releaseSlot(actor.parkingSlotId);
+                }
               }
+
 
 
               // ⏱ Throttle de 1 minuto SOLO para tareas que van a zone-load
@@ -234,16 +280,19 @@ if (!targetRoute) {
                   targetRoute.points[targetRoute.points.length - 1];
 
                 // Para rutas que terminan en zone-load, verificamos capacidad ANTES de arrancar
-                if (targetZone === 'zone-load') {
-                  const freeSlotInZoneLoad = findNearestFreeSlotInZone(
-                    'zone-load',
-                    routeEnd
-                  );
-                  if (!freeSlotInZoneLoad) {
-                    // No arrancamos la ruta hacia zona de carga si no hay slots libres
-                    return actor;
+                const zonesThatRequireCapacityCheck = new Set([
+                  'zone-load',
+                  'zone-load-download-t1-t2',
+                  'zone-parking-distribution', // si también quieres aplicar al camión de distribución
+                ]);
+
+                if (zonesThatRequireCapacityCheck.has(targetZone)) {
+                  const freeSlot = findNearestFreeSlotInZone(targetZone, routeEnd);
+                  if (!freeSlot) {
+                    return actor; // no arrancamos si no hay slots libres
                   }
                 }
+
 
                 let currentPosition: Point;
 

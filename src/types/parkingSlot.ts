@@ -110,8 +110,15 @@ export const PARKING_ZONES: ParkingZone[] = [
       rotation: 0,
       occupied: false,
     },
+    {
+      id: 'slot-exit-t1-1',
+      x: 0.340,
+      y: 0.999,
+      rotation: 0,
+      occupied: false,
+    }
   ],
-  allowedTypes: ['truck1', 'truck2', 'truckDistribucion'],
+  allowedTypes: ['truck1', 'truck2', 'truckDistribucion', "truckT1"],
 },
 {
     id: 'zone-parking-distribution',
@@ -133,5 +140,13 @@ export const PARKING_ZONES: ParkingZone[] = [
         { id: 'slot-t1-t2-5', x: 0.685, y: 0.730, rotation: 0, occupied: false },
       ],
     allowedTypes: ['truck1', 'truckT1']
-}
+},
+{
+  id: 'zone-check-t1',
+  name: 'Checkpoint T1',
+  slots: [
+    { id: 'slot-check-t1-1', x: 0.36, y: 0.82, rotation: 180, occupied: false },
+  ],
+  allowedTypes: ['truckT1'],
+},
 ];

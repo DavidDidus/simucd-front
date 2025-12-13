@@ -60,7 +60,7 @@ export const ACTOR_DEFINITIONS: Record<ActorType, Omit<ActorConfig, 'count'>> = 
     name: 'Camión Tipo T1',
     imagePath: camionT1,
     speed: 0.8,
-    size: { width: 80, height: 120 },
+    size: { width: 200, height: 250 },
     behavior: 'stationary', // 🆕 Estacionado por defecto
   },
   truckDistribucion: {

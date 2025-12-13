@@ -10,7 +10,8 @@ export function useActorStates(
   actorsLoading: boolean,
   actorCounts: Record<ActorType, number>,
   selectedRouteId: string,
-  truckIdsFromBackend?: string[] | undefined
+  truckIdsFromBackend?: string[] | undefined,
+  truckT1IdsFromBackend?: string[] | undefined,
 ) {
   const [actorStates, setActorStates] = useState<ActorState[]>([]);
 
@@ -18,8 +19,10 @@ export function useActorStates(
     if (actorsLoading) return;
 
     const actorTypesData = Object.entries(actorCounts)
-      .filter(([_, count]) => count > 0)
-      .map(([type, count]) => ({ type: type as ActorType, count }));
+  .filter(([type, count]) => count > 0)
+  .filter(([type]) => type !== 'truckT1') // 👈 no asignar parking normal a T1
+  .map(([type, count]) => ({ type: type as ActorType, count }));
+
 
     // 👇 SIEMPRE definimos arrays para todos los tipos
     const actorIdsByType: Record<ActorType, string[]> = {
@@ -38,12 +41,10 @@ export function useActorStates(
       if (t === 'truck1' && truckIdsFromBackend && truckIdsFromBackend.length) {
         // Usa los IDs del backend
         actorIdsByType[t] = truckIdsFromBackend.slice(0, count);
+      } else if (t === 'truckT1' && truckT1IdsFromBackend && truckT1IdsFromBackend.length) {
+        actorIdsByType[t] = truckT1IdsFromBackend.slice(0, count);
       } else {
-        // Resto igual que antes
-        actorIdsByType[t] = Array.from(
-          { length: count },
-          (_, i) => `${actorType}-${i}`
-        );
+        actorIdsByType[t] = Array.from({ length: count }, (_, i) => `${actorType}-${i}`);
       }
     }
 
@@ -61,6 +62,8 @@ export function useActorStates(
     // ⭐ Buscamos el slot de salida para el camión de distribución
     const exitZone = PARKING_ZONES.find(zone => zone.id === 'zone-exit');
     const exitSlot = exitZone?.slots.find(slot => slot.id === 'slot-exit-1');
+    const exitSlotT1 = exitZone?.slots.find(slot => slot.id === 'slot-exit-t1-1');
+
 
     const states: ActorState[] = [];
 
@@ -99,8 +102,17 @@ export function useActorStates(
             slotId: exitSlot.id,
           } as any;
         }
+        else if (actorType === 'truckT1' && exitSlotT1) {
+          assignedPosition = {
+            x: exitSlotT1.x,
+            y: exitSlotT1.y,
+            rotation: exitSlotT1.rotation ?? 0,
+            slotId: exitSlotT1.id,
+          } as any;
+        }
 
-        const isDistributionTruck = actorType === 'truckDistribucion';
+        const isHiddenInitially =
+          actorType === 'truckDistribucion' || actorType === 'truckT1';
 
         const state: ActorState = {
           id: actorId,
@@ -117,7 +129,7 @@ export function useActorStates(
           operationState: 'idle',
 
           // ⭐ truco clave: el camión de distribución "existe" pero está oculto
-          isExited: isDistributionTruck ? true : false,
+          isExited: isHiddenInitially ? true : false,
         };
 
         states.push(state);
@@ -125,7 +137,7 @@ export function useActorStates(
     }
 
     setActorStates(states);
-  }, [actors, actorsLoading, actorCounts, selectedRouteId, truckIdsFromBackend]);
+  }, [actors, actorsLoading, actorCounts, selectedRouteId, truckIdsFromBackend, truckT1IdsFromBackend]);
 
   return { actorStates, setActorStates };
 }
