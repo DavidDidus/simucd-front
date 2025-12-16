@@ -146,6 +146,7 @@ export const PARKING_ZONES: ParkingZone[] = [
   name: 'Checkpoint T1',
   slots: [
     { id: 'slot-check-t1-1', x: 0.36, y: 0.82, rotation: 180, occupied: false },
+    { id: 'slot-check-t1-2', x: 0.28, y: 0.82, rotation: 0, occupied: false },
   ],
   allowedTypes: ['truckT1'],
 },

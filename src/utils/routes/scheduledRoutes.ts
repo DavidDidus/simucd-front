@@ -78,45 +78,6 @@ export const DISTRIBUTION_ROUTE_MAP: Record<string, string> = {
   'slot-distribution-2': 'route-distribution-truck', // o la ruta específica si tienes otra
 };
 
-function findNearestLoadRouteFromSlot(
-  slotId: string
-): { loadSlotId: string; routeId: string } | undefined {
-  // Buscamos el slot de origen (puede ser slot-distribution-1 o 2)
-  const allSlots = PARKING_ZONES.flatMap(z => z.slots);
-  const fromSlot = allSlots.find(s => s.id === slotId);
-
-  if (!fromSlot) return undefined;
-
-  let best:
-    | { loadSlotId: string; routeId: string; dist2: number }
-    | undefined;
-
-  for (const zone of PARKING_ZONES) {
-    for (const slot of zone.slots) {
-      // solo slots de carga
-      if (!slot.id.startsWith('slot-load-')) continue;
-
-      const routeId = LOAD_TO_ROUTE_MAP[slot.id];
-      if (!routeId) continue;
-
-      const dx = slot.x - fromSlot.x;
-      const dy = slot.y - fromSlot.y;
-      const dist2 = dx * dx + dy * dy;
-
-      if (!best || dist2 < best.dist2) {
-        best = {
-          loadSlotId: slot.id,
-          routeId,
-          dist2,
-        };
-      }
-    }
-  }
-
-  if (!best) return undefined;
-  return { loadSlotId: best.loadSlotId, routeId: best.routeId };
-}
-
 export function createDistributionExitTaskForTruck(
   truckId: string,
   actorType: string,
@@ -171,20 +132,7 @@ export function getRouteIdForLoadSlot(loadSlotId: string): string | undefined {
   return LOAD_TO_ROUTE_MAP[loadSlotId];
 }
 
-/**
- * Crea una SimTask de tipo "followRoute" para un camión estacionado en un slot.
- *
- * - truckId: id del actor (ej: "truck1-0")
- * - actorType: por ahora string (ej: "truck1"), luego lo tipamos con ActorType
- * - parkingSlotId: id del slot (ej: "slot-1")
- *
- * La tarea resultante:
- *  - type = "followRoute"
- *  - status = "pending"
- *  - priority = 1 (por defecto)
- *  - startAtSimTime = undefined (la decidirá el scheduler)
- *  - payload.routeId = ruta asignada al slot
- */
+
 export function createFollowRouteTaskForTruck(
   truckId: string,
   actorType: string,
@@ -269,6 +217,35 @@ export function createFollowRouteTaskFromLoadSlot(
   });
 }
 
+export function createT2ReturnToParkingTask(
+  truckId: string,
+  actorType: string,
+  options: {
+    startAtSimTime?: string;
+    targetSlotId?: string;     // slot parking asignado
+    priority?: number;
+    dependsOn?: string[];
+  }
+): SimTask {
+  const routeId = 'route-t2-return-to-parking'; // 👈 crea esta ruta en PREDEFINED_ROUTES
+
+  return createBaseTask({
+    id: `t2:return:${truckId}:${options.targetSlotId}:${Date.now()}`,
+    actorId: truckId,
+    actorType,
+    type: 'followRoute',
+    priority: options.priority ?? 1,
+    startAtSimTime: options.startAtSimTime ? parseHM(options.startAtSimTime) : undefined,
+    dependsOn: options.dependsOn,
+    payload: {
+      routeId,
+      targetZone: 'zone-parking',     // 👈 para que el engine lo estacione
+      targetSlotId: options.targetSlotId,
+    },
+  });
+}
+
+
 export function createDistributionEntryTaskForTruck(
   truckId: string,
   actorType: string,
@@ -338,6 +315,101 @@ export function createT1GoToCheckTask(
   });
 }
 
+
+export const T2_T1T2_ENTRY_ROUTE_MAP: Record<string, string> = {
+  'slot-t1-t2-1': 'route-t2-to-t1t2-1',
+  'slot-t1-t2-2': 'route-t2-to-t1t2-2',
+  'slot-t1-t2-3': 'route-t2-to-t1t2-3',
+  'slot-t1-t2-4': 'route-t2-to-t1t2-4',
+  'slot-t1-t2-5': 'route-t2-to-t1t2-5',
+};
+
+export function getRouteIdForT2EntryToT1T2Slot(slotId: string) {
+  return T2_T1T2_ENTRY_ROUTE_MAP[slotId];
+}
+
+export function createT2EntryToT1T2SlotTask(
+  truckId: string,
+  actorType: string,
+  options: {
+    startAtSimTime?: string;
+    targetSlotId: string;     // slot-t1-t2-X
+    priority?: number;
+    dependsOn?: string[];
+  }
+): SimTask {
+  const routeId = getRouteIdForT2EntryToT1T2Slot(options.targetSlotId);
+  if (!routeId) {
+    throw new Error(`[T2 v2+] No route for targetSlotId=${options.targetSlotId}`);
+  }
+
+  return createBaseTask({
+    id: `t2:entry:t1t2:${truckId}:${options.targetSlotId}:${Date.now()}`,
+    actorId: truckId,
+    actorType,
+    type: 'followRoute',
+    priority: options.priority ?? 1,
+    startAtSimTime: options.startAtSimTime ? parseHM(options.startAtSimTime) : undefined,
+    dependsOn: options.dependsOn,
+    payload: {
+      routeId,
+      targetZone: 'zone-load-download-t1-t2',
+      targetSlotId: options.targetSlotId, // 👈 clave: slot específico
+    },
+  });
+}
+
+// 🆕 T2 v2+ salida desde zona T1/T2 hacia salida general
+export const T2_T1T2_EXIT_ROUTE_MAP: Record<string, string> = {
+  'slot-t1-t2-1': 'route-t1t2-1-to-exit',
+  'slot-t1-t2-2': 'route-t1t2-2-to-exit',
+  'slot-t1-t2-3': 'route-t1t2-3-to-exit',
+  'slot-t1-t2-4': 'route-t1t2-4-to-exit',
+  'slot-t1-t2-5': 'route-t1t2-5-to-exit',
+};
+
+export function getRouteIdForT2ExitFromT1T2Slot(fromSlotId: string) {
+  return T2_T1T2_EXIT_ROUTE_MAP[fromSlotId];
+}
+
+
+export function createT2ExitFromT1T2SlotTask(
+  truckId: string,
+  actorType: string,
+  options: {
+    startAtSimTime?: string;
+    fromSlotId: string;          // 👈 slot-t1-t2-X real donde está estacionado
+    targetSlotId?: string;       // opcional (si quieres “terminar” visualmente en un slot-exit)
+    priority?: number;
+    dependsOn?: string[];
+  }
+): SimTask {
+  const routeId = getRouteIdForT2ExitFromT1T2Slot(options.fromSlotId);
+
+  if (!routeId) {
+    throw new Error(
+      `[T2 Exit] No route for exit from slot ${options.fromSlotId}. Revisa T2_T1T2_EXIT_ROUTE_MAP`
+    );
+  }
+
+  return createBaseTask({
+    id: `t2:exit:t1t2:${truckId}:${options.fromSlotId}:${Date.now()}`,
+    actorId: truckId,
+    actorType,
+    type: 'followRoute',
+    priority: options.priority ?? 1,
+    startAtSimTime: options.startAtSimTime ? parseHM(options.startAtSimTime) : undefined,
+    dependsOn: options.dependsOn,
+    payload: {
+      routeId,
+      targetZone: 'zone-exit',
+      // opcional: si tu engine soporta terminar en un slot de salida específico
+      ...(options.targetSlotId ? { targetSlotId: options.targetSlotId } : {}),
+    },
+  });
+}
+
+
 export function createWaitTask(
   actorId: string,
   actorType: string,
@@ -382,6 +454,99 @@ export function createT1EntryTaskForTruck(
       routeId,
       targetZone: 'zone-load-download-t1-t2', // 👈 CLAVE
       // 👇 sin targetSlotId
+    },
+  });
+}
+
+// 1) Mapa: desde qué slot T1/T2 sale → qué ruta usar para ir a chequeo final
+export const T1T2_TO_FINAL_CHECK_ROUTE_MAP: Record<string, string> = {
+  'slot-t1-t2-1': 'route-t1t2-1-to-check-2',
+  'slot-t1-t2-2': 'route-t1t2-2-to-check-2',
+  'slot-t1-t2-3': 'route-t1t2-3-to-check-2',
+  'slot-t1-t2-4': 'route-t1t2-4-to-check-2',
+  'slot-t1-t2-5': 'route-t1t2-5-to-check-2',
+};
+
+export function getRouteIdForT1FinalCheckFromSlot(fromSlotId: string) {
+  return T1T2_TO_FINAL_CHECK_ROUTE_MAP[fromSlotId];
+}
+
+export function createT1FinalCheckTaskForTruck(
+  truckId: string,
+  actorType: string,
+  options: {
+    startAtSimTime?: string;
+    fromSlotId: string;          // 👈 slot real donde está estacionado
+    targetSlotId?: string;       // 👈 por defecto slot-check-t1-2
+    priority?: number;
+    dependsOn?: string[];
+  }
+): SimTask {
+  const targetSlotId = options.targetSlotId ?? 'slot-check-t1-2';
+
+  const routeId = getRouteIdForT1FinalCheckFromSlot(options.fromSlotId);
+  if (!routeId) {
+    throw new Error(
+      `[T1] No route for final check from slot ${options.fromSlotId}. Revisa T1T2_TO_FINAL_CHECK_ROUTE_MAP`
+    );
+  }
+
+  return createBaseTask({
+    id: `t1:finalCheck:${truckId}:${options.fromSlotId}:${Date.now()}`,
+    actorId: truckId,
+    actorType,
+    type: 'followRoute',
+    priority: options.priority ?? 1,
+    startAtSimTime: options.startAtSimTime ? parseHM(options.startAtSimTime) : undefined,
+    dependsOn: options.dependsOn,
+    payload: {
+      routeId,
+      targetZone: 'zone-check-t1',
+      targetSlotId, // 👈 termina en slot-check-t1-2
+    },
+  });
+}
+
+export const T1_EXIT_ROUTE_MAP: Record<string, string> = {
+  'slot-check-t1-2': 'route-t1-check2-to-exit',
+};
+
+export function getRouteIdForT1ExitFromSlot(fromSlotId: string) {
+  return T1_EXIT_ROUTE_MAP[fromSlotId];
+}
+
+export function createT1ExitTaskForTruck(
+  truckId: string,
+  actorType: string,
+  options: {
+    startAtSimTime?: string;
+    fromSlotId: string;           // debe ser slot-check-t1-2
+    targetSlotId?: string;        // default slot-exit-t1-1
+    priority?: number;
+    dependsOn?: string[];
+  }
+): SimTask {
+  const targetSlotId = options.targetSlotId ?? 'slot-exit-t1-1';
+
+  const routeId = getRouteIdForT1ExitFromSlot(options.fromSlotId);
+  if (!routeId) {
+    throw new Error(
+      `[T1 Exit] El camión debe salir desde slot-check-t1-2. fromSlotId=${options.fromSlotId}`
+    );
+  }
+
+  return createBaseTask({
+    id: `t1:exit:${truckId}:${Date.now()}`,
+    actorId: truckId,
+    actorType,
+    type: 'followRoute',
+    priority: options.priority ?? 1,
+    startAtSimTime: options.startAtSimTime ? parseHM(options.startAtSimTime) : undefined,
+    dependsOn: options.dependsOn,
+    payload: {
+      routeId,
+      targetZone: 'zone-exit',
+      targetSlotId,
     },
   });
 }

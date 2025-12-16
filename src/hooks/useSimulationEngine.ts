@@ -16,6 +16,7 @@ import {
   releaseSlot,
 } from '../utils/parkingUtils';
 
+
 const SIM_DAY_SECONDS = 24 * 60 * 60;
 const LOOP_DAY = false;
 
@@ -145,9 +146,26 @@ export function useSimulationEngine(
     let last = performance.now();
 
     const tick = (now: number) => {
-      const dtReal = (now - last) / 1000;
+  let dtReal = (now - last) / 1000;
+  
+  // Si el usuario se fue más de 3 segundos, descartamos ese frame
+  const CATCH_UP_THRESHOLD = 3.0;
+    if (dtReal > CATCH_UP_THRESHOLD) {
+      console.log(`⏸️ Descartando frame grande (${dtReal.toFixed(1)}s)`);
       last = now;
-      const dtSim = dtReal * speedMult;
+      raf = requestAnimationFrame(tick);
+      return;
+    }
+    
+    last = now;
+    
+    // Para variaciones normales, limitamos a 100ms
+    const MAX_DT = 0.1;
+    if (dtReal > MAX_DT) {
+      dtReal = MAX_DT;
+    }
+    
+    const dtSim = dtReal * speedMult;
 
       // Tiempo
       let nextSimTime = simTimeRef.current + dtSim;

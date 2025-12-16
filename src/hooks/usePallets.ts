@@ -24,6 +24,14 @@ type DistribucionUnloadEvent = {
   numPallets: number;
 };
 
+type T1UnloadEvent = {
+  id: string;
+  camionId: string;     // "T1-0001"
+  startAtSec: number;
+  endAtSec: number;
+  numPallets: number;   // mismo estilo que distribución
+};
+
 
 type ParrilleroEvent = {
   id: string;
@@ -33,6 +41,15 @@ type ParrilleroEvent = {
   palletsIniciales: number;
   palletsFinales: number;
 };
+
+type ParrilleroElimEvent = {
+  id: string;
+  camionId: string | null;
+  startAtSec: number;
+  endAtSec: number;
+  palletIds: string[];
+};
+
 
 // Estructuras mínimas para leer planificacion_detalle del backend
 type PalletPlan = {
@@ -74,6 +91,8 @@ type AbastecimientoEvent = {
   id: string;
   startAtSec: number;
   endAtSec: number;
+  source?: 'distribucion' | 't1';
+  camionId?: string; // solo para t1, ej "T1-0002"
 };
 
 
@@ -86,7 +105,7 @@ type CranePalletEvent = {
     startAtSec: number; // cuando empieza a moverlo
     endAtSec: number;   // cuando debería haber llegado
     kind: 'acomodo' | 'despacho';
-    operacion: 'acomodo_pallet' | 'despacho_completo' | 'carga_pallet' | 'acomodo_staging_mixto' | "grua_camion_distribucion";
+    operacion: 'acomodo_pallet' | 'despacho_completo' | 'carga_pallet' | 'acomodo_staging_mixto' | "grua_camion_distribucion" | "carga_t2_v2";
     label: string;
   };
 
@@ -130,8 +149,6 @@ function buildPalletToCamionMap(
   return map;
 }
 
-// Dado un camionId, busca en actorStates en qué slot está,
-// y si es slot-load-X devuelve load-zone-X
 function findLoadZoneForCamion(
   camionId: string | null,
   actorStates?: ActorState[] | null
@@ -140,7 +157,9 @@ function findLoadZoneForCamion(
 
   const actor = actorStates.find(
     (a) =>
-      (a.type === 'truck1' || a.type === 'truck2') &&
+      (a.type === 'truck1' ||
+        a.type === 'truck2' ||
+        a.type === 'truckT1') &&
       a.id === camionId
   );
   if (!actor) return null;
@@ -148,14 +167,22 @@ function findLoadZoneForCamion(
   const slotId = (actor as any).parkingSlotId as string | undefined;
   if (!slotId) return null;
 
-  // Esperamos algo tipo "slot-load-1"
-  const match = slotId.match(/slot-load-(\d+)/);
-  if (!match) return null;
+  // "slot-load-N" -> "load-zone-N"
+  const loadMatch = slotId.match(/slot-load-(\d+)/);
+  if (loadMatch) {
+    const index = loadMatch[1];
+    return `load-zone-${index}`;
+  }
 
-  const index = match[1]; // "1"
-  return `load-zone-${index}`; // "load-zone-1"
+  // "slot-t1-t2-N" -> "download-t1-t2-zone-N"
+  const t1t2Match = slotId.match(/slot-t1-t2-(\d+)/);
+  if (t1t2Match) {
+    const index = t1t2Match[1];
+    return `download-t1-t2-zone-${index}`;
+  }
+
+  return null;
 }
-
 export function usePallets({ backendResponse, simTimeSec, actorStates,craneTransitOverrides }: UsePalletsArgs) {
   const [pallets, setPallets] = useState<RuntimePallet[]>([]);
   const palletsRef = useRef<RuntimePallet[]>([]);
@@ -185,6 +212,12 @@ export function usePallets({ backendResponse, simTimeSec, actorStates,craneTrans
   const removedTrucksRef = useRef<Set<string>>(new Set());
   // Para recordar el último estado de estacionamiento de cada camión
   const truckParkingStateRef = useRef<Record<string, string | null>>({});
+
+  const firedT1UnloadEventsRef = useRef<Set<string>>(new Set());
+const t1SpawnCountsRef = useRef<Record<string, number>>({});
+const firedParrilleroElimEventsRef = useRef<Set<string>>(new Set());
+
+
 
   // 1) Normalizar datos del backend (SOLO turno_noche por ahora)
   const { lineaTiempoRecursos, palletToCamionMap } = useMemo(() => {
@@ -275,6 +308,41 @@ const distribucionUnloadEvents = useMemo<DistribucionUnloadEvent[]>(() => {
   // console.log('[DistribucionUnloadEvents]', events);
   return events;
 }, [lineaTiempoRecursos]);
+
+const t1UnloadEvents = useMemo<T1UnloadEvent[]>(() => {
+  const events: T1UnloadEvent[] = [];
+
+  (lineaTiempoRecursos ?? []).forEach((e, idx) => {
+    if (e.recurso !== 'grua') return;
+    if (!e.hora_comienzo || !e.hora_fin) return;
+
+    const label = String(e.label ?? '');
+
+    // Ej: "grua_t1_camion_T1-0001"
+    const m = label.match(/^grua_t1_camion_(T1-[A-Za-z0-9_-]+)/i);
+    if (!m) return;
+
+    const camionId = m[1];
+
+    const startAtSec = hmToSeconds(e.hora_comienzo);
+    const endAtSec = hmToSeconds(e.hora_fin);
+
+    // Si quieres EXACTAMENTE igual que distribución
+    const numPallets = 28;
+
+    events.push({
+      id: `t1-unload-${idx}-${e.hora_comienzo}-${camionId}`,
+      camionId,
+      startAtSec,
+      endAtSec,
+      numPallets,
+    });
+  });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+  return events;
+}, [lineaTiempoRecursos]);
+
 
 const spawnPalletInDownloadDistributionZone = useCallback(
   (params: { id: string; createdAtSimSec: number; label: string }) => {
@@ -372,6 +440,113 @@ useEffect(() => {
   });
 }, [simTimeSec, distribucionUnloadEvents, spawnPalletInDownloadDistributionZone]);
 
+
+const spawnPalletInZone = useCallback(
+  (params: {
+    id: string;
+    createdAtSimSec: number;
+    label: string;
+    zoneId: string;
+    camionAsignado: string | null;
+  }) => {
+    const zone = PALLET_SPAWN_POINTS.find((z) => z.id === params.zoneId);
+
+    if (!zone) {
+      console.warn(
+        `[usePallets] No se encontró zona "${params.zoneId}" en PALLET_SPAWN_POINTS`
+      );
+      return;
+    }
+
+    if (!zone.slots || zone.slots.length === 0) {
+      console.warn(`[usePallets] "${params.zoneId}" no tiene slots definidos`);
+      return;
+    }
+
+    // 👇 slots ocupados por pallets ya estacionados (no en tránsito)
+    const occupiedSlotIds = new Set(
+      palletsRef.current
+        .filter((p) => p.zoneId === zone.id && !p.inTransit)
+        .map((p) => p.slotId)
+    );
+
+    const emptySlots = zone.slots.filter((slot) => !occupiedSlotIds.has(slot.id));
+
+    // PRIORIDAD: vacíos → si no hay, usamos cualquier slot
+    const candidateSlots = emptySlots.length > 0 ? emptySlots : zone.slots;
+    const chosenSlot = candidateSlots[0];
+
+    const newPallet: RuntimePallet = {
+      id: params.id,
+      zoneId: zone.id,
+      slotId: chosenSlot.id,
+      createdAtSimSec: params.createdAtSimSec,
+      label: params.label,
+      camionAsignado: params.camionAsignado,
+    };
+
+    setPallets((prev) => [...prev, newPallet]);
+  },
+  []
+);
+
+
+useEffect(() => {
+  if (!t1UnloadEvents.length) return;
+
+  t1UnloadEvents.forEach((ev) => {
+    // Aún no empieza
+    if (simTimeSec < ev.startAtSec) return;
+
+    // Ya finalizado completamente
+    if (firedT1UnloadEventsRef.current.has(ev.id)) return;
+
+    // ✅ la zona depende del slot actual del camión (tu función ya lo resuelve)
+    const targetZoneId = findLoadZoneForCamion(ev.camionId, actorStates);
+    if (!targetZoneId) {
+      // camión aún no estacionado / aún no en actorStates -> reintentar en siguiente tick
+      return;
+    }
+
+    const totalDuration = Math.max(1, ev.endAtSec - ev.startAtSec);
+    const elapsed = Math.min(
+      totalDuration,
+      Math.max(0, simTimeSec - ev.startAtSec)
+    );
+
+    // cuántos pallets deberían existir ya (0..numPallets)
+    const shouldHave = Math.min(
+      ev.numPallets,
+      Math.floor((elapsed / totalDuration) * ev.numPallets)
+    );
+
+    const already = t1SpawnCountsRef.current[ev.id] ?? 0;
+    const toSpawn = shouldHave - already;
+
+    if (toSpawn > 0) {
+      for (let i = 0; i < toSpawn; i++) {
+        const seq = already + i + 1;
+
+        const palletId = `T1-${ev.camionId}-${ev.id}-P${seq}`;
+
+        spawnPalletInZone({
+          id: palletId,
+          createdAtSimSec: simTimeSec,
+          label: `Pallet descarga ${ev.camionId} #${seq}`,
+          zoneId: targetZoneId,          // 👈 download-t1-t2-zone-N
+          camionAsignado: ev.camionId,    // 👈 importante para tu cleanup al retirarse
+        });
+      }
+
+      t1SpawnCountsRef.current[ev.id] = shouldHave;
+    }
+
+    // Si terminó la ventana y ya creamos todos, marcar como terminado
+    if (simTimeSec >= ev.endAtSec && shouldHave >= ev.numPallets) {
+      firedT1UnloadEventsRef.current.add(ev.id);
+    }
+  });
+}, [simTimeSec, t1UnloadEvents, actorStates, spawnPalletInZone]);
 
     const checkPalletEvents = useMemo<CheckPalletEvent[]>(() => {
     const events = (lineaTiempoRecursos ?? [])
@@ -597,6 +772,33 @@ useEffect(() => {
       });
       return;
     }
+    // 👇 NUEVO: carga T2 vuelta 2+ desde await-zone
+const mT2 = e.operacion.match(/^grua_([A-Za-z0-9_-]+)_v(\d+)/i);
+if (mT2) {
+  const camionId = mT2[1];       // "E45"
+  const vuelta = parseInt(mT2[2], 10);
+
+  if (vuelta >= 2) {
+    // label: "carga_dia - pallet MX3"
+    const match = baseLabel.match(/pallet\s+([A-Za-z0-9_-]+)/i);
+    const palletId =
+      match?.[1] ??
+      `pallet-t2-${camionId}-v${vuelta}-${e.hora_comienzo}`;
+
+    events.push({
+      id: `crane-${e.id_recurso}-${e.hora_comienzo}-${palletId}-t2v${vuelta}`,
+      palletId,
+      camionId,
+      startAtSec,
+      endAtSec,
+      kind: 'despacho',              // 👈 se elimina al final
+      operacion: 'carga_t2_v2',
+      label: baseLabel,
+    });
+    return;
+  }
+}
+
   });
 
   events.sort((a, b) => a.startAtSec - b.startAtSec);
@@ -610,9 +812,8 @@ const abastecimientoEvents = useMemo<AbastecimientoEvent[]>(() => {
     if (e.recurso !== 'grua') return;
     if (!e.operacion) return;
 
-    // Operaciones tipo "grua_camion_distribucion-0001_v0"
-    const op = String(e.operacion).toLowerCase();
-    if (!op.includes('grua_camion_distribucion')) return;
+    const opRaw = String(e.operacion);
+    const op = opRaw.toLowerCase();
 
     // Label "abastecimiento" (ignoramos mayúsculas / minúsculas)
     const label = String(e.label ?? '').toLowerCase();
@@ -623,16 +824,95 @@ const abastecimientoEvents = useMemo<AbastecimientoEvent[]>(() => {
     const startAtSec = hmToSeconds(e.hora_comienzo);
     const endAtSec = hmToSeconds(e.hora_fin);
 
+    // ✅ Caso A: abastecimiento desde camión distribución
+    if (op.includes('grua_camion_distribucion')) {
+      events.push({
+        id: `abastecimiento-distrib-${idx}-${e.hora_comienzo}`,
+        startAtSec,
+        endAtSec,
+        source: 'distribucion',
+      });
+      return;
+    }
+
+    // ✅ Caso B: abastecimiento desde camión T1: "grua_T1-0002_v0"
+    // (acepta mayúsculas/minúsculas y sufijos)
+    const mT1 = opRaw.match(/grua_(T1-[A-Za-z0-9_-]+)_v\d+/i);
+    if (mT1) {
+      const camionId = mT1[1];
+
+      events.push({
+        id: `abastecimiento-t1-${idx}-${e.hora_comienzo}-${camionId}`,
+        startAtSec,
+        endAtSec,
+        source: 't1',
+        camionId,
+      });
+      return;
+    }
+  });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+  return events;
+}, [lineaTiempoRecursos]);
+
+const parrilleroElimEvents = useMemo<ParrilleroElimEvent[]>(() => {
+  const events: ParrilleroElimEvent[] = [];
+
+  (lineaTiempoRecursos ?? []).forEach((e, idx) => {
+    if (e.recurso !== 'parrillero') return;
+    if (String(e.operacion ?? '') !== 'parrilleo') return;
+    if (!e.hora_comienzo || !e.hora_fin) return;
+
+    const label = String(e.label ?? '');
+
+    // Esperamos algo como:
+    // parrilleo_v2_camion_E51_elim(MX1,MX2,...)
+    const m = label.match(/parrilleo_v2_camion_([A-Za-z0-9_-]+)_elim\(([^)]*)\)/i);
+    if (!m) return;
+
+    const camionId = m[1] ?? null;
+
+    const rawList = (m[2] ?? '').trim();
+    const palletIds = rawList
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (!palletIds.length) return;
+
+    const startAtSec = hmToSeconds(e.hora_comienzo);
+    const endAtSec = hmToSeconds(e.hora_fin);
+
     events.push({
-      id: `abastecimiento-${idx}-${e.hora_comienzo}`,
+      id: `parrillero-elim-${idx}-${e.hora_comienzo}-${camionId}`,
+      camionId,
       startAtSec,
       endAtSec,
+      palletIds,
     });
   });
 
   events.sort((a, b) => a.startAtSec - b.startAtSec);
   return events;
 }, [lineaTiempoRecursos]);
+
+useEffect(() => {
+  if (!parrilleroElimEvents.length) return;
+
+  parrilleroElimEvents.forEach((ev) => {
+    if (firedParrilleroElimEventsRef.current.has(ev.id)) return;
+
+    // ✅ eliminamos cuando termina (hora_fin)
+    if (simTimeSec < ev.endAtSec) return;
+
+    const toDelete = new Set(ev.palletIds);
+
+    setPallets((prev) => prev.filter((p) => !toDelete.has(p.id)));
+
+    firedParrilleroElimEventsRef.current.add(ev.id);
+  });
+}, [simTimeSec, parrilleroElimEvents]);
 
 
   // 4) Función para generar un pallet en temporary-zone en un slot aleatorio
@@ -791,6 +1071,42 @@ const abastecimientoEvents = useMemo<AbastecimientoEvent[]>(() => {
       };
     }
 
+    // 👇 Si es carga T2 v2 y aún no existe el pallet, tomar uno de await-zone
+// 👇 Si es carga T2 v2+ y aún no existe el pallet, tomar uno de await-zone
+if (!runtimePallet && ev.operacion === 'carga_t2_v2') {
+  const candidates = palletsRef.current
+    .map((p, idx) => ({ p, idx }))
+    .filter(({ p }) => p.zoneId === 'await-zone' && !p.inTransit);
+
+  if (!candidates.length) {
+    // ✅ Si no hay pallets, reintentamos en ticks futuros.
+    // ✅ Pero si ya pasó la ventana del evento, lo consumimos para que no quede pegado.
+    if (simTimeSec >= ev.endAtSec) {
+      firedCraneEventsRef.current.add(ev.id);
+    }
+    return;
+  }
+
+  const chosen = candidates[0];
+
+  setPallets(prev => {
+    const copy = [...prev];
+    copy[chosen.idx] = {
+      ...chosen.p,
+      id: ev.palletId,          // 👈 sincroniza con backend
+      camionAsignado: ev.camionId,
+    };
+    return copy;
+  });
+
+  runtimePallet = {
+    ...chosen.p,
+    id: ev.palletId,
+    camionAsignado: ev.camionId,
+  };
+}
+
+
     // Si sigue sin existir (ej: todavía no llegó el pallet a load-zone), salimos
     runtimePallet = palletsRef.current.find((p) => p.id === ev.palletId);
     if (!runtimePallet) {
@@ -827,8 +1143,13 @@ const abastecimientoEvents = useMemo<AbastecimientoEvent[]>(() => {
 
       dropOnTruck = true;
       dropTruckId = distribTruck.id;
-    }
-    else {
+    } else if (ev.operacion === 'carga_t2_v2') {
+      // 🔹 pallet viene SIEMPRE desde zona de espera
+      targetZoneId = 'await-zone';
+
+      dropOnTruck = true;
+      dropTruckId = ev.camionId;
+    } else {
       // 👉 resto de operaciones sigue la lógica actual basada en camión
       const camionId =
         runtimePallet.camionAsignado ?? ev.camionId ?? null;
@@ -881,25 +1202,31 @@ const abastecimientoEvents = useMemo<AbastecimientoEvent[]>(() => {
         const candidateSlots =
           emptySlots.length > 0 ? emptySlots : zone.slots;
 
-        const chosenSlot =
-          candidateSlots[
-            Math.floor(Math.random() * candidateSlots.length)
-          ];
+        // ✅ Si el pallet se va a un camión (dropOnTruck), NO lo movemos dentro de await-zone.
+//    Lo dejamos “en el mismo slot” y Simulation2D lo llevará al camión usando dropTruckId.
+let chosenSlot = candidateSlots[Math.floor(Math.random() * candidateSlots.length)];
 
-        const fromPos = getSlotNormPosition(
-          current.zoneId,
-          current.slotId
-        );
-        const toPos = getSlotNormPosition(zone.id, chosenSlot.id);
+const fromPos = getSlotNormPosition(current.zoneId, current.slotId);
 
-        const path = aStarPathfinding(
-          fromPos,
-          toPos,
-          PREDEFINED_OBSTACLES
-        );
+let toPos: Point = fromPos;
+let pathNorm: Point[] = [fromPos, fromPos];
 
-        const pathNorm: Point[] =
-          path && path.length > 1 ? path : [fromPos, toPos];
+if (!dropOnTruck) {
+  // Caso normal: sí se mueve a otro slot / otra zona
+  toPos = getSlotNormPosition(zone.id, chosenSlot.id);
+
+  const path = aStarPathfinding(fromPos, toPos, PREDEFINED_OBSTACLES);
+  pathNorm = path && path.length > 1 ? path : [fromPos, toPos];
+} else {
+  // Caso drop al camión: “destino lógico” = mismo slot (para no pasearlo por la zona)
+  // (Elegimos el slot actual si existe en la zona)
+  const sameSlot = zone.slots.find(s => s.id === current.slotId);
+  if (sameSlot) chosenSlot = sameSlot;
+
+  // Path dummy (el destino real lo calcula Simulation2D con dropTruckId)
+  toPos = fromPos;
+  pathNorm = [fromPos, fromPos];
+}
 
         const updated = [...prev];
         updated[idx] = {
@@ -1029,37 +1356,53 @@ useEffect(() => {
 useEffect(() => {
   if (!abastecimientoEvents.length) return;
 
-  abastecimientoEvents.forEach(ev => {
+  abastecimientoEvents.forEach((ev) => {
     if (firedAbastecimientoEventsRef.current.has(ev.id)) return;
 
     // Solo programamos cuando ya empezó el evento (o justo al empezar)
     if (simTimeSec < ev.startAtSec) return;
 
-    setPallets(prev => {
-      const completoZone = PALLET_SPAWN_POINTS.find(
-        (z) => z.zone === 'completo'
-      );
+    setPallets((prev) => {
+      const completoZone = PALLET_SPAWN_POINTS.find((z) => z.zone === 'completo');
       if (!completoZone || !completoZone.slots?.length) {
-        console.warn(
-          '[usePallets] No se encontró zona "completo" para abastecimiento'
-        );
+        console.warn('[usePallets] No se encontró zona "completo" para abastecimiento');
         firedAbastecimientoEventsRef.current.add(ev.id);
         return prev;
       }
 
-      // Pallets elegibles: en zona de descarga distribucion, en el piso, sin tránsito programado aún
+      // 🔹 determinar desde qué zonas tomar pallets
+      let sourceZoneIds: string[] = [];
+
+      if (ev.source === 'distribucion') {
+        sourceZoneIds = ['download-distribution-zone'];
+      } else {
+        // source === 't1'
+        // Los pallets T1 fueron creados en download-t1-t2-zone-N (según slot del camión).
+        // Tomamos los que están asignados a ese camión y estén en cualquier download-t1-t2-zone-*
+        // (así no dependemos de "N" si el camión cambió o si tienes varios slots).
+        sourceZoneIds = []; // lo filtramos por prefijo más abajo
+      }
+
+      // Pallets elegibles: en el piso, sin tránsito programado aún
       const candidates = prev
         .map((p, idx) => ({ p, idx }))
-        .filter(({ p }) =>
-          p.zoneId === 'download-distribution-zone' &&
-          !p.inTransit &&
-          !p.transitStartSimSec &&  // aún no programado
-          !p.transitEndSimSec
-        );
+        .filter(({ p }) => {
+          if (p.inTransit) return false;
+          if (p.transitStartSimSec || p.transitEndSimSec) return false;
+
+          if (ev.source === 'distribucion') {
+            return p.zoneId === 'download-distribution-zone';
+          }
+
+          // ev.source === 't1'
+          if (!ev.camionId) return false;
+          const inT1DownloadZone = typeof p.zoneId === 'string' && p.zoneId.startsWith('download-t1-t2-zone-');
+          return inT1DownloadZone && p.camionAsignado === ev.camionId;
+        });
 
       if (!candidates.length) {
-        // ❌ No hay pallets aún: seguimos intentando en ticks futuros.
-        // ✅ Solo marcamos como terminado si ya pasó la ventana del evento.
+        // ❌ No hay pallets aún: seguir intentando en ticks futuros.
+        // ✅ Solo marcar como terminado si ya pasó la ventana del evento.
         if (simTimeSec >= ev.endAtSec) {
           firedAbastecimientoEventsRef.current.add(ev.id);
         }
@@ -1083,35 +1426,21 @@ useEffect(() => {
         const start = ev.startAtSec + candidateIdx * perPalletSec;
         const end = ev.startAtSec + (candidateIdx + 1) * perPalletSec;
 
-        const emptySlots = completoZone.slots.filter(
-          (slot) => !occupiedSlotIds.has(slot.id)
-        );
-        const candidateSlots =
-          emptySlots.length > 0 ? emptySlots : completoZone.slots;
+        const emptySlots = completoZone.slots.filter((slot) => !occupiedSlotIds.has(slot.id));
+        const candidateSlots = emptySlots.length > 0 ? emptySlots : completoZone.slots;
 
-        const chosenSlot =
-          candidateSlots[
-            Math.floor(Math.random() * candidateSlots.length)
-          ];
-
+        const chosenSlot = candidateSlots[Math.floor(Math.random() * candidateSlots.length)];
         occupiedSlotIds.add(chosenSlot.id);
 
         const fromPos = getSlotNormPosition(p.zoneId, p.slotId);
         const toPos = getSlotNormPosition(completoZone.id, chosenSlot.id);
 
-        const path = aStarPathfinding(
-          fromPos,
-          toPos,
-          PREDEFINED_OBSTACLES
-        );
+        const path = aStarPathfinding(fromPos, toPos, PREDEFINED_OBSTACLES);
+        const pathNorm: Point[] = path && path.length > 1 ? path : [fromPos, toPos];
 
-        const pathNorm: Point[] =
-          path && path.length > 1 ? path : [fromPos, toPos];
-
-        // 👇 Usar palletIdx (índice real en el array next) en lugar de idx
         next[palletIdx] = {
           ...p,
-          // 👇 OJO: aquí **NO** activamos inTransit todavía
+          // 👇 aquí NO activamos inTransit todavía (tu otro effect lo activa al llegar la hora)
           fromZoneId: p.zoneId,
           fromSlotId: p.slotId,
           toZoneId: completoZone.id,
@@ -1267,37 +1596,40 @@ const palletCountsBySlot = useMemo(() => {
 
   // 8) Efecto: Cuando un camión se retira, eliminar todos sus pallets de la load-zone
   useEffect(() => {
-    if (!actorStates) return;
+  if (!actorStates) return;
 
-    const trucks = actorStates.filter(
-      (a) => a.type === 'truck1' || a.type === 'truck2' || a.type === 'truck3' || a.type === 'truck4' || a.type === 'truckT1'
-    );
+  const trucks = actorStates.filter(
+    (a) =>
+      a.type === 'truck1' ||
+      a.type === 'truck2' ||
+      a.type === 'truck3' ||
+      a.type === 'truck4' ||
+      a.type === 'truckT1'
+  );
 
-    trucks.forEach((truck) => {
-      const truckId = truck.id;
-      const currentParkingSlotId = (truck as any).parkingSlotId as string | null | undefined;
-      const wasParked = truckParkingStateRef.current[truckId];
+  trucks.forEach((truck) => {
+    const truckId = truck.id;
+    const currentParkingSlotId =
+      (truck as any).parkingSlotId as string | null | undefined;
+    const wasParked = truckParkingStateRef.current[truckId];
 
-      // Detectar si el camión se acaba de retirar: antes estaba en un slot, ahora no
-      if (wasParked && !currentParkingSlotId) {
-        // El camión se retiró → eliminar todos sus pallets
-        if (!removedTrucksRef.current.has(truckId)) {
-          setPallets((prev) => {
-            const filtered = prev.filter(
-              (p) => p.camionAsignado !== truckId
-            );
-            return filtered;
-          });
+    // 👉 SOLO T2 / camiones normales limpian pallets
+    const shouldRemovePallets =
+      truck.type !== 'truckT1';
 
-          removedTrucksRef.current.add(truckId);
-        }
+    if (wasParked && !currentParkingSlotId && shouldRemovePallets) {
+      if (!removedTrucksRef.current.has(truckId)) {
+        setPallets(prev =>
+          prev.filter(p => p.camionAsignado !== truckId)
+        );
+        removedTrucksRef.current.add(truckId);
       }
+    }
 
-      // Actualizar el estado actual del camión
-      truckParkingStateRef.current[truckId] = currentParkingSlotId ?? null;
-    });
-  }, [actorStates]);
-
+    truckParkingStateRef.current[truckId] =
+      currentParkingSlotId ?? null;
+  });
+}, [actorStates]);
 
 
 return {

@@ -16,9 +16,9 @@ import { useRoute } from '../../hooks/useRoute';
 import { useObstacle } from '../../hooks/useObstacle';
 import { PREDEFINED_OBSTACLES } from '../../utils/routes/obstacles';
 import { aStarPathfinding } from '../../utils/routes/pathfinding';
-import { createFollowRouteTaskForTruck, createFollowRouteTaskFromLoadSlot , createExitRouteTaskForTruck, createDistributionEntryTaskForTruck, createDistributionExitTaskForTruck, createT1GoToCheckTask,
-  createWaitTask,
-    createT1EntryTaskForTruck,
+import { createFollowRouteTaskForTruck, createFollowRouteTaskFromLoadSlot , createExitRouteTaskForTruck, createDistributionEntryTaskForTruck, 
+  createDistributionExitTaskForTruck, createT1GoToCheckTask, createWaitTask, createT1EntryTaskForTruck, 
+  createT1FinalCheckTaskForTruck, createT1ExitTaskForTruck ,createT2ReturnToParkingTask ,createT2EntryToT1T2SlotTask ,createT2ExitFromT1T2SlotTask
 } from '../../utils/routes/scheduledRoutes';
 import { usePallets, type EventoRecurso } from '../../hooks/usePallets';
 import { PalletsLayer } from './layers/PalletsLayer';
@@ -35,6 +35,7 @@ import DevToolbar from './DevToolbar';
 import { useSimulationEngine } from '../../hooks/useSimulationEngine';
 import { PALLET_SPAWN_POINTS } from '../../types/pallets';
 import type { RuntimePallet } from '../../types/pallets';
+import { findNearestFreeSlotInZone, occupySlot, releaseSlot  } from '../../utils/parkingUtils';
 
 import grua_horquilla from '../../assets/Simulacion/GRUA_HORQUILLA.png';
 import pallet_icon from '../../assets/Simulacion/PALLET.png'; 
@@ -96,6 +97,7 @@ type Props = {
   backendResponse?: BackendResponse | null;
 };
 
+
 const DEFAULT_ROUTE: Point[] = [
   { x: 0.06, y: 0.76 },
   { x: 0.94, y: 0.76 },
@@ -127,7 +129,36 @@ type TruckExitMotion = {
   path: Point[];
 };
 
-function pickFreeSlotT1T2(actorStates: ActorState[]): string | undefined {
+type T1FinalCheckEvent = {
+  key: string;
+  camionId: string;
+  startAtSec: number;
+  durationSec: number;
+};
+
+
+type T2ReturnEvent = {
+  key: string;
+  camionId: string;   // "E71"
+  startAtSec: number; // 09:26
+};
+
+type T2EntryV2Event = {
+  key: string;
+  camionId: string;   // "E47"
+  startAtSec: number; // hora_comienzo
+};
+
+type T2ExitEvent = {
+  key: string;
+  camionId: string;     // "E44"
+  startAtSec: number;   // hora_comienzo
+  endAtSec: number;     // hora_fin (opcional, por si quieres forzar hide)
+};
+
+
+
+function pickFreeSlotInT1T2Zone(actorStates: ActorState[]): string | undefined {
   const zone = PARKING_ZONES.find(z => z.id === 'zone-load-download-t1-t2');
   const slots = zone?.slots ?? [];
   if (!slots.length) return undefined;
@@ -140,8 +171,6 @@ function pickFreeSlotT1T2(actorStates: ActorState[]): string | undefined {
 
   return slots.map(s => s.id).find(id => !occupied.has(id));
 }
-
-
 
 const toUrl = (m: any) => (typeof m === 'string' ? m : m?.src || '');
 
@@ -247,6 +276,10 @@ const processedDistributionEntryKeysRef = useRef<Set<string>>(new Set());
 const processedDistributionExitKeysRef = useRef<Set<string>>(new Set());
 const t1TruckInitializedRef = useRef(false);
 const processedT1EntryKeysRef = useRef<Set<string>>(new Set());
+const processedT1FinalCheckKeysRef = useRef<Set<string>>(new Set());
+const lastT2T1T2SlotRef = useRef<Record<string, string>>({});
+const processedT2ExitKeysRef = useRef<Set<string>>(new Set());
+
 
   // Recursos por turno (UI)
   const [resources, setResources] = useState<ShiftResources>({
@@ -443,15 +476,18 @@ const truckIdsFromBackend = useMemo(() => {
     return Array.from(ids).sort((a, b) => a - b);
   }, [backendResponse]);
 
- // Configuración de actores
+// 1. En la línea ~482, calcular el MÁXIMO de grúas entre todos los turnos
 const actorCounts = useMemo<Record<ActorType, number>>(
   () => {
-    const requestedCranes = resources.noche || 0;
+    // Tomamos el MÁXIMO entre todos los turnos
+    const maxCranes = Math.max(
+      resources.noche || 0,
+      resources.turnoA || 0,
+      resources.turnoB || 0
+    );
     const backendCranes = craneResourceIds.length;
 
-    // Queremos al menos una grúa si hay tareas,
-    // y no menos grúas que ids de recurso (para mapear 1 a 1)
-    const craneCount = Math.max(requestedCranes, backendCranes || 1);
+    const craneCount = Math.max(maxCranes, backendCranes || 1);
 
     return {
       truck1: truckIdsFromBackend.length || 26,
@@ -463,7 +499,7 @@ const actorCounts = useMemo<Record<ActorType, number>>(
       crane1: craneCount,
     };
   },
-  [truckIdsFromBackend, resources.noche, craneResourceIds]
+  [truckIdsFromBackend, resources.noche, resources.turnoA, resources.turnoB, craneResourceIds]
 );
 
   // Engine de simulación (tiempo + actores + tareas + parking)
@@ -988,8 +1024,499 @@ const t1CheckDurationByTruckId = useMemo(() => {
   return map;
 }, [backendResponse]);
 
+const t1FinalCheckEvents = useMemo<T1FinalCheckEvent[]>(() => {
+  const root: any = (backendResponse as any)?.data ?? backendResponse;
+  const linea: EventoRecurso[] | undefined = root?.linea_tiempo_recursos;
+  if (!Array.isArray(linea)) return [];
+
+  const events: T1FinalCheckEvent[] = [];
+
+  linea.forEach((e: any, idx: number) => {
+    if (e?.recurso !== 'chequeador') return;
+    if (typeof e?.hora_comienzo !== 'string') return;
+
+    const label = String(e.label ?? '').toLowerCase();
+    if (!label.includes('chequeo_final_t1_camion_')) return;
+
+    const m = String(e.label ?? '').match(
+      /chequeo_final_t1_camion_(T1-[A-Za-z0-9_-]+)/i
+    );
+    const camionId = m?.[1];
+    if (!camionId) return;
+
+    const startAtSec = parseHM(e.hora_comienzo);
+    const durationSec = Math.max(0, (e.duracion_min ?? 0) * 60);
+
+    const key = `t1-final-check-${camionId}-${e.hora_comienzo}-${idx}`;
+    events.push({ key, camionId, startAtSec, durationSec });
+  });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+  return events;
+}, [backendResponse]);
+
+useEffect(() => {
+  if (!t1FinalCheckEvents.length) return;
+  if (!actorStates.length) return;
+
+  t1FinalCheckEvents.forEach(ev => {
+    if (processedT1FinalCheckKeysRef.current.has(ev.key)) return;
+    if (simTimeSec < ev.startAtSec) return;
+
+    const actor =
+      actorStates.find(a => a.type === 'truckT1' && a.id === ev.camionId) ??
+      actorStates.find(a => a.type === 'truckT1');
+
+    if (!actor) {
+      processedT1FinalCheckKeysRef.current.add(ev.key);
+      return;
+    }
+
+    // Debe estar en un slot de la zona T1/T2 para usar ruta por slot
+    const fromSlotId = (actor as any).parkingSlotId as string | undefined;
+    if (!fromSlotId || !fromSlotId.startsWith('slot-t1-t2-')) {
+      // reintentar próximo tick
+      return;
+    }
+
+    try {
+      const startSec = Math.max(simTimeSec, ev.startAtSec);
+
+      // 1) Ir desde slot-t1-t2-X hacia slot-check-t1-2 (ruta por slot)
+      const goCheck = createT1FinalCheckTaskForTruck(actor.id, actor.type, {
+        startAtSimTime: formatHM(startSec),
+        fromSlotId,
+        targetSlotId: 'slot-check-t1-2',
+      });
+      addTask(goCheck);
+
+      // 2) Esperar chequeo (duración del evento)
+      const wait = createWaitTask(actor.id, actor.type, {
+        dependsOn: [goCheck.id],
+        durationSec: ev.durationSec,
+      });
+      addTask(wait);
+
+      const exitStartSec = startSec + ev.durationSec;
+
+      const exit = createT1ExitTaskForTruck(actor.id, actor.type, {
+        startAtSimTime: formatHM(exitStartSec),
+        fromSlotId: 'slot-check-t1-2',
+        targetSlotId: 'slot-exit-t1-1',
+      });
+
+      addTask(exit);
+
+      processedT1FinalCheckKeysRef.current.add(ev.key);
+
+      console.log(
+        `[T1 Final Check] ✅ Cadena creada para ${actor.id}: ${fromSlotId} -> check2 (${ev.durationSec}s) -> salida`
+      );
+    } catch (err) {
+      console.error('[T1 Final Check] ❌ Error creando cadena', err);
+      processedT1FinalCheckKeysRef.current.add(ev.key);
+    }
+  });
+}, [t1FinalCheckEvents, simTimeSec, actorStates, addTask, formatHM]);
+
+type T2ReturnEvent = {
+  key: string;
+  camionId: string;
+  startAtSec: number;
+};
+
+const t2ReturnEvents = useMemo<T2ReturnEvent[]>(() => {
+  const root: any = (backendResponse as any)?.data ?? backendResponse;
+  const linea: EventoRecurso[] | undefined = root?.linea_tiempo_recursos;
+  if (!Array.isArray(linea)) return [];
+
+  const events: T2ReturnEvent[] = [];
+
+  linea.forEach((e: any, idx: number) => {
+    if (e?.recurso !== 'camion_t2') return;
+    if (typeof e?.hora_comienzo !== 'string') return;
+
+    const op = String(e.operacion ?? '');
+
+    // ✅ aceptar ambos tipos de arribo
+    const isArriboSoloV1 = op === 't2_arribo_solo_v1';
+    const isArriboFinal = op === 't2_arribo_final';
+    if (!isArriboSoloV1 && !isArriboFinal) return;
+
+    // ✅ "E71_arribo" -> "E71"
+    // ✅ "E44_arribo_final" -> "E44"
+    const raw = String(e.id_recurso ?? '');
+    const camionId =
+      raw.replace(/_arribo(_final)?$/i, '') || `E${idx}`;
+
+    const startAtSec = parseHM(e.hora_comienzo);
+
+    const key = `t2-arribo-${op}-${camionId}-${e.hora_comienzo}-${idx}`;
+
+    events.push({ key, camionId, startAtSec });
+  });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+  return events;
+}, [backendResponse]);
+
+const processedT2ReturnKeysRef = useRef<Set<string>>(new Set());
+
+useEffect(() => {
+  if (!t2ReturnEvents.length) return;
+  if (!actorStates.length) return;
+
+  t2ReturnEvents.forEach(ev => {
+    if (processedT2ReturnKeysRef.current.has(ev.key)) return;
+    if (simTimeSec < ev.startAtSec) return;
+
+    // ✅ T2 son truck1
+    const actor =
+      actorStates.find(a => a.type === 'truck1' && a.id === ev.camionId) ??
+      actorStates.find(a => a.type === 'truck1' && a.id.includes(ev.camionId));
+
+    if (!actor) {
+      processedT2ReturnKeysRef.current.add(ev.key);
+      return;
+    }
+
+    try {
+      const startSec = Math.max(simTimeSec, ev.startAtSec);
+
+      // 1) Hacer visible si venía "exited"
+      if (actor.isExited) {
+        setActorStates(prev =>
+          prev.map(a => (a.id === actor.id ? { ...a, isExited: false } : a))
+        );
+      }
+
+      // 2) Crear task de retorno (NO ocupar slot acá)
+      const task = createT2ReturnToParkingTask(actor.id, actor.type, {
+        startAtSimTime: formatHM(startSec),
+        // si tu engine soporta targetSlotId, lo puedes agregar acá.
+        // targetSlotId: 'slot-3',
+      });
+
+      addTask(task);
+      processedT2ReturnKeysRef.current.add(ev.key);
+
+      console.log(
+        `[T2 Return solo v1] ✅ ${actor.id} retorno a parking a las ${formatHM(startSec)}`
+      );
+    } catch (err) {
+      console.error('[T2 Return solo v1] ❌ Error creando retorno', err);
+      processedT2ReturnKeysRef.current.add(ev.key);
+    }
+  });
+}, [t2ReturnEvents, simTimeSec, actorStates, addTask, formatHM, setActorStates]);
+
+const t2EntryV2Events = useMemo<T2EntryV2Event[]>(() => {
+  const root: any = (backendResponse as any)?.data ?? backendResponse;
+  const linea: EventoRecurso[] | undefined = root?.linea_tiempo_recursos;
+  if (!Array.isArray(linea)) return [];
+
+  const events: T2EntryV2Event[] = [];
+
+  linea.forEach((e: any, idx: number) => {
+    if (e?.recurso !== 'camion_t2') return;
+    if (String(e?.operacion ?? '').toLowerCase() !== 't2 - entrada') return;
+    if (typeof e?.hora_comienzo !== 'string') return;
+
+    // label ejemplo: "T2 E47 v2"
+    const label = String(e.label ?? '');
+    const m = label.match(/\bT2\s+([A-Za-z0-9_-]+)\s+v(\d+)\b/i);
+    if (!m) return;
+
+    const camionId = m[1];
+    const vuelta = parseInt(m[2], 10);
+    if (!Number.isFinite(vuelta) || vuelta < 2) return;
+
+    const startAtSec = parseHM(e.hora_comienzo);
+    const key = `t2-entry-v${vuelta}-${camionId}-${e.hora_comienzo}-${idx}`;
+
+    events.push({ key, camionId, startAtSec });
+  });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+  return events;
+}, [backendResponse]);
+
+const t2ExitEvents = useMemo<T2ExitEvent[]>(() => {
+  const root: any = (backendResponse as any)?.data ?? backendResponse;
+  const linea: EventoRecurso[] | undefined = root?.linea_tiempo_recursos;
+  if (!Array.isArray(linea)) return [];
+
+  const events: T2ExitEvent[] = [];
+
+  linea.forEach((e: any, idx: number) => {
+    if (e?.recurso !== 'camion_t2') return;
+    if (typeof e?.operacion !== 'string') return;
+
+    const op = e.operacion.toLowerCase();
+    // "t2_carga_dia - salida"
+    if (!op.includes('salida')) return;
+
+    if (typeof e?.hora_comienzo !== 'string') return;
+
+    const camionId =
+      String(e.id_recurso ?? '').trim() ||
+      (String(e.label ?? '').match(/\bT2\s+([A-Za-z0-9_-]+)/i)?.[1] ?? `E${idx}`);
+
+    const startAtSec = parseHM(e.hora_comienzo);
+    const endAtSec =
+      typeof e?.hora_fin === 'string' ? parseHM(e.hora_fin) : startAtSec + (e.duracion_min ?? 0) * 60;
+
+    const key = `t2-exit-${camionId}-${e.hora_comienzo}-${idx}`;
+
+    events.push({ key, camionId, startAtSec, endAtSec });
+  });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+  return events;
+}, [backendResponse]);
+
+useEffect(() => {
+  if (!t2ExitEvents.length) return;
+  if (!actorStates.length) return;
+
+  t2ExitEvents.forEach(ev => {
+    if (processedT2ExitKeysRef.current.has(ev.key)) return;
+
+    // aún no llega la hora
+    if (simTimeSec < ev.startAtSec) return;
+
+    // T2 en tu sim son truck1 (como ya hiciste en retorno/entrada v2)
+    const actor =
+      actorStates.find(a => a.type === 'truck1' && a.id === ev.camionId) ??
+      actorStates.find(a => a.type === 'truck1' && a.id.includes(ev.camionId));
+
+    // si aún no existe el actor, reintenta hasta que pase la ventana
+    if (!actor) {
+      if (simTimeSec >= ev.endAtSec) processedT2ExitKeysRef.current.add(ev.key);
+      return;
+    }
+
+    const slotIdNow = (actor as any).parkingSlotId as string | undefined;
+
+const fromSlotId =
+  slotIdNow?.startsWith('slot-t1-t2-')
+    ? slotIdNow
+    : lastT2T1T2SlotRef.current[actor.id];
+
+    if (!fromSlotId) {
+      // si el camión aún no “está estacionado” cuando llega la hora, reintenta
+      if (simTimeSec >= ev.endAtSec) processedT2ExitKeysRef.current.add(ev.key);
+      return;
+    }
+
+    try {
+      const startSec = Math.max(simTimeSec, ev.startAtSec);
+
+      // Si venía oculto por alguna razón, lo mostramos antes de sacarlo
+      if (actor.isExited) {
+        setActorStates(prev =>
+          prev.map(a => (a.id === actor.id ? { ...a, isExited: false } : a))
+        );
+      }
+
+      const task = createT2ExitFromT1T2SlotTask(
+        actor.id,
+        actor.type,
+        {
+          fromSlotId,
+          startAtSimTime: formatHM(ev.endAtSec),
+        }
+      );
+
+      addTask(task);
+      processedT2ExitKeysRef.current.add(ev.key);
+
+      console.log(
+        `[T2 Exit] ✅ ${actor.id} sale desde ${fromSlotId} a las ${formatHM(startSec)}`
+      );
+    } catch (err) {
+      console.error('[T2 Exit] ❌ Error creando salida', ev, err);
+      processedT2ExitKeysRef.current.add(ev.key);
+    }
+  });
+}, [t2ExitEvents, simTimeSec, actorStates, addTask, formatHM, setActorStates]);
 
 
+const processedT2EntryV2KeysRef = useRef<Set<string>>(new Set());
+
+// offset acumulado por camión (segundos de espera)
+const truckDelaySecRef = useRef<Map<string, number>>(new Map());
+
+function getTruckDelaySec(camionId: string) {
+  return truckDelaySecRef.current.get(camionId) ?? 0;
+}
+function addTruckDelaySec(camionId: string, deltaSec: number) {
+  const prev = truckDelaySecRef.current.get(camionId) ?? 0;
+  truckDelaySecRef.current.set(camionId, prev + Math.max(0, deltaSec));
+}
+
+useEffect(() => {
+  if (!t2EntryV2Events.length) return;
+  if (!actorStates.length) return;
+
+  const reviveSlot = getParkingSlotById('slot-exit-1') ?? getParkingSlotById('slot-exit-t1-1');
+
+  t2EntryV2Events.forEach(ev => {
+    if (processedT2EntryV2KeysRef.current.has(ev.key)) return;
+
+    const plannedStart = ev.startAtSec + getTruckDelaySec(ev.camionId);
+    if (simTimeSec < plannedStart) return;
+
+    const actor =
+      actorStates.find(a => a.type === 'truck1' && a.id === ev.camionId) ??
+      actorStates.find(a => a.type === 'truck1' && a.id.includes(ev.camionId));
+
+    if (!actor) {
+      // ojo: acá NO lo marques procesado si el actor aún no existe
+      // porque si el engine crea actores tarde, te lo “comes”.
+      return;
+    }
+
+    // 1) asegurar visible + con posición/slot si venía exited
+    if (actor.isExited || !(actor as any).parkingSlotId) {
+      setActorStates(prev =>
+        prev.map(a => {
+          if (a.id !== actor.id) return a;
+
+          const next: any = { ...a, isExited: false };
+
+          // si no tiene slot, lo “revivimos” en un slot staging (fuera de la operación)
+          if (!(a as any).parkingSlotId && reviveSlot) {
+            next.parkingSlotId = reviveSlot.id;
+            next.parkingPosition = {
+              x: reviveSlot.x,
+              y: reviveSlot.y,
+              rotation: reviveSlot.rotation,
+            };
+          }
+
+          return next;
+        })
+      );
+    }
+
+    // 2) buscar slot libre en zona t1/t2
+    const freeSlotId = pickFreeSlotInT1T2Zone(actorStates);
+    if (!freeSlotId) {
+      // no hay slot -> esperar (no marcar procesado)
+      return;
+    }
+
+    // 3) delay acumulado por espera real
+    const waitedSec = Math.max(0, simTimeSec - plannedStart);
+    if (waitedSec > 0) addTruckDelaySec(ev.camionId, waitedSec);
+
+    // 4) crear task
+    try {
+      const task = createT2EntryToT1T2SlotTask(actor.id, actor.type, {
+        startAtSimTime: formatHM(simTimeSec),
+        targetSlotId: freeSlotId,
+      });
+
+      addTask(task);
+      processedT2EntryV2KeysRef.current.add(ev.key);
+
+      console.log(
+        `[T2 v2+] ✅ ${actor.id} entra a ${freeSlotId} @ ${formatHM(simTimeSec)} (esperó ${Math.round(waitedSec/60)}m)`
+      );
+    } catch (err) {
+      console.error('[T2 v2+] ❌ Error creando task', err);
+      processedT2EntryV2KeysRef.current.add(ev.key);
+    }
+  });
+}, [t2EntryV2Events, simTimeSec, actorStates, addTask, formatHM, setActorStates]);
+/*
+const t1TruckExitEvents = useMemo<T1TruckExitEvent[]>(() => {
+  const root: any = (backendResponse as any)?.data ?? backendResponse;
+  const linea: EventoRecurso[] | undefined = root?.linea_tiempo_recursos;
+  if (!Array.isArray(linea)) return [];
+
+  const events: T1TruckExitEvent[] = [];
+
+  linea.forEach((e: any, idx: number) => {
+    if (e?.recurso !== 'camion_t1') return;
+    if (typeof e?.hora_comienzo !== 'string') return;
+
+    const label = String(e.label ?? '').toLowerCase();
+    const op = String(e.operacion ?? '').toLowerCase();
+
+    const isExit =
+      label.includes('salida') || op.includes('salida') || op === 't1_h0_h3';
+
+    if (!isExit) return;
+
+    const camionId = String(e.id_recurso ?? `T1-${idx}`);
+    const startAtSec = parseHM(e.hora_comienzo);
+    const key = `t1-exit-${camionId}-${e.hora_comienzo}-${idx}`;
+
+    events.push({ key, camionId, startAtSec });
+  });
+
+  events.sort((a, b) => a.startAtSec - b.startAtSec);
+  return events;
+}, [backendResponse]);  
+
+const processedT1ExitKeysRef = useRef<Set<string>>(new Set());
+
+useEffect(() => {
+  if (!t1TruckExitEvents.length) return;
+  if (!actorStates.length) return;
+
+  t1TruckExitEvents.forEach(ev => {
+    if (processedT1ExitKeysRef.current.has(ev.key)) return;
+    if (simTimeSec < ev.startAtSec) return;
+
+    const actor =
+      actorStates.find(a => a.type === 'truckT1' && a.id === ev.camionId) ??
+      actorStates.find(a => a.type === 'truckT1');
+
+    if (!actor) {
+      processedT1ExitKeysRef.current.add(ev.key);
+      return;
+    }
+
+    // Ya salió
+    if (actor.isExited) {
+      processedT1ExitKeysRef.current.add(ev.key);
+      return;
+    }
+
+    const fromSlotId = (actor as any).parkingSlotId as string | undefined;
+
+    // 👇 Regla: SOLO sale desde chequeo final
+    if (fromSlotId !== 'slot-check-t1-2') {
+      // No lo procesamos aún → reintentar en el próximo tick
+      return;
+    }
+
+    try {
+      const startSec = Math.max(simTimeSec, ev.startAtSec);
+
+      const task = createT1ExitTaskForTruck(actor.id, actor.type, {
+        startAtSimTime: formatHM(startSec),
+        fromSlotId: 'slot-check-t1-2',
+        targetSlotId: 'slot-exit-t1-1',
+      });
+
+      addTask(task);
+      processedT1ExitKeysRef.current.add(ev.key);
+
+      console.log(
+        `[T1 Exit] ✅ ${actor.id} slot-check-t1-2 -> slot-exit-t1-1 a las ${formatHM(startSec)}`
+      );
+    } catch (err) {
+      console.error('[T1 Exit] ❌ Error creando tarea de salida', err);
+      processedT1ExitKeysRef.current.add(ev.key);
+    }
+  });
+}, [t1TruckExitEvents, simTimeSec, actorStates, addTask, formatHM]);
+
+*/
 type TruckMoveEvent = {
   key: string;
   camionId: string;
@@ -1264,6 +1791,23 @@ const palletResourceMap = useMemo(() => {
     }
   });
 }, [truckExitEvents, simTimeSec, actorStates, addTask, formatHM]);
+
+useEffect(() => {
+  if (!actorStates?.length) return;
+
+  actorStates.forEach((a) => {
+    // ⚠️ ajusta si tu type real para T2 no es "truck2"
+    if (a.type !== 'truck2') return;
+
+    const slotId = (a as any).parkingSlotId as string | undefined;
+
+    // guardamos SOLO si está realmente en un slot-t1-t2-*
+    if (slotId && slotId.startsWith('slot-t1-t2-')) {
+      lastT2T1T2SlotRef.current[a.id] = slotId;
+    }
+  });
+}, [actorStates]);
+
 
 useEffect(() => {
   if (!actorStates.length) return;
@@ -1866,7 +2410,26 @@ useEffect(() => {
   });
 }, [truckMoveEvents, simTimeSec, actorStates, addTask, formatHM]);
 
-const visibleActors = actorStates.filter(a => !a.isExited);
+const visibleActors = useMemo(() => {
+  const currentShift = shiftForSecond(simTimeSec);
+  const activeCranes = resources[currentShift] || 0;
+  
+  return actorStates.filter(a => {
+    if (a.isExited) return false;
+    
+    // Si es una grúa, solo mostramos las primeras N según el turno
+    if (a.type === 'crane1') {
+      const cranes = actorStates
+        .filter(actor => actor.type === 'crane1')
+        .sort((x, y) => x.id.localeCompare(y.id));
+      
+      const craneIndex = cranes.findIndex(c => c.id === a.id);
+      return craneIndex < activeCranes;
+    }
+    
+    return true;
+  });
+}, [actorStates, simTimeSec, resources]);
 
   return (
     <div>
