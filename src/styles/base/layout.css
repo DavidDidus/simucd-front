@@ -18,9 +18,17 @@
   transition: none;
 }
 
+.grid:not(.editing) .card,
+.grid:not(.editing) .big-card {
+  opacity: 1;
+  transform: none !important; /* 👈 Forzar reset */
+  filter: none;
+  pointer-events: auto;
+}
+
 .hide-on-expand {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1;
+  pointer-events: auto;
   filter: blur(1px);
   transition: opacity .6s ease, filter .6s ease, transform .6s ease;
 }

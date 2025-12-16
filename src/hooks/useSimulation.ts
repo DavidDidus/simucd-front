@@ -32,6 +32,9 @@ export function useSimulation() {
   const [showDashboard, setShowDashboard] = useState(false);
 
   const isMonteCarlo = useMemo(() => !!mcResult, [mcResult]);
+  const API_BASE_URL = import.meta.env.PROD 
+  ? "/api" // En producción usa URLs relativas (proxy)
+  : "http://localhost:8000"; // En desarrollo directo al backend
 
   // -------- Normalizador general (endpoint "simple") --------
   function normalizeApiResult(raw: any): { noche: any | null; dia: any | null } {
@@ -157,7 +160,7 @@ export function useSimulation() {
       const payload = buildPayload(params, night, dayA, dayB);
 
       const response = await axios.post(
-        "http://localhost:8000/simulate-montecarlo",
+        `${API_BASE_URL}/simulate`,
         payload
       );
 
@@ -202,7 +205,7 @@ export function useSimulation() {
       const payload = buildPayload(params, night, dayA, dayB);
 
       const response = await axios.post(
-        "http://localhost:8000/simulate",
+        `${API_BASE_URL}/simulate`,
         payload
       );
 

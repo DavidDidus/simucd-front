@@ -19,15 +19,32 @@
 }
 
 .num-input.compact {
-  width: 72px;
+  width: clamp(60px, 15vw, 80px); /* 👈 Responsive width */
   border: none;
   background: white;
   padding: 2px 4px;
   border-bottom: 2px solid #fff;
   text-align: center;
+   font-size: clamp(14px, 2.5vw, 16px); /* 👈 Responsive font */
 }
 
 .num-input.compact:focus {
   border-color: var(--green-700);
   box-shadow: none;
+}
+
+@media (max-width: 768px) {
+  .num-input.compact {
+    width: 70px;
+    font-size: 15px;
+    padding: 5px 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .num-input.compact {
+    width: 60px;
+    font-size: 14px;
+    padding: 4px 5px;
+  }
 }

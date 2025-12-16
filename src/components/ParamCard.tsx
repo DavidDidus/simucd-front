@@ -30,6 +30,10 @@ export function ParamCard({ label, value, onChange, imgSrc }: ParamCardProps) {
     }
   };
 
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.select();
+  };
+
   return (
     <div className="card">
       <img src={imgSrc} alt={label} className="card-img" />
@@ -38,11 +42,14 @@ export function ParamCard({ label, value, onChange, imgSrc }: ParamCardProps) {
         <input
           className="num-input compact"
           type="number"
+          inputMode="numeric" 
+          pattern="[0-9]*" 
           min={0}
           step={1}
           value={inputValue}
           onChange={(e) => handleChange(e.target.value)}
           onBlur={handleBlur}
+          onFocus={handleFocus} 
           aria-label={label}
         />
       

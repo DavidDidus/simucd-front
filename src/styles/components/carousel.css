@@ -26,6 +26,9 @@
   position: relative;
   grid-column: span 2;
   grid-row: span 2;
+  display: flex; 
+  flex-direction: column; 
+  min-height: 0;
 }
 
 .qc-track {
@@ -35,6 +38,8 @@
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   gap: 0;
+  flex: 1; /* 👈 Ocupar el espacio disponible */
+  min-height: 0;
 }
 
 .qc-page {
@@ -45,10 +50,12 @@
   gap: 24px;
   padding: 0 40px;
   min-height: 100%;
+
 }
 
 .qc-cell { 
   min-width: 0; 
+  min-height: 0;
 }
 
 .qc-btn {
@@ -65,6 +72,7 @@
   place-items: center;
   font-size: 24px;
   line-height: 1;
+  z-index: 2;
 }
 
 .qc-btn:hover { 
@@ -83,28 +91,129 @@
 .day-cards-container {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 220px)); /* 👈 Auto-ajuste */
+  gap: clamp(12px, 2vw, 18px);
   max-width: 1200px;
   margin: 0 auto;
   justify-items: center;
   align-items: stretch;
+  padding: 0 clamp(8px, 2vw, 16px); /* 👈 Padding responsive */
 }
 
 .day-cards-container .card {
   width: 100%;
-  min-width: 180px;
-  max-width: 280px;
+  min-width: 140px;
+  max-width: 220px;
 }
-
-@media (max-width: 1200px) {
+@media (max-width: 1200px) and (min-width: 901px) {
   .day-cards-container {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
   }
 }
 
-@media (max-width: 600px) {
+/* Tablets (900px - 600px) */
+@media (max-width: 900px) and (min-width: 601px) {
   .day-cards-container {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr); /* 2 columnas */
+    gap: 14px;
+  }
+}
+
+@media (max-width: 900px) and (min-width: 601px) {
+  .day-cards-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    padding: 0 16px;
+  }
+  
+  .day-cards-container .card {
+    max-width: 100%;
+  }
+  
+  /* 👇 Carrusel se mantiene 2x2 */
+  .qc-page {
+    gap: 20px;
+    padding: 0 30px;
+  }
+}
+
+/* Móviles grandes (600px - 480px) */
+@media (max-width: 600px) and (min-width: 481px) {
+  .day-cards-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    max-width: 100%;
+    padding: 0 12px;
+  }
+  
+  .day-cards-container .card {
+    max-width: 100%;
+  }
+  
+  /* 👇 Carrusel se mantiene 2x2 */
+  .qc-page {
+    gap: 16px;
+    padding: 0 24px;
+  }
+}
+
+/* Móviles (< 480px) */
+@media (max-width: 480px) {
+  .day-cards-container {
+    grid-template-columns: repeat(2, 1fr); /* 👈 2x2 en móviles */
+    grid-template-rows: repeat(2, 1fr);
+    gap: 10px;
+    max-width: 100%;
+    padding: 0 8px;
+  }
+
+  .day-cards-container .card {
+    max-width: 100%;
+    min-width: 0;
+    padding: 12px 8px;
+  }
+  
+  /* 👇 Carrusel se mantiene 2x2 */
+  .quad-carousel {
+    grid-row: auto;
+  }
+  
+  .qc-page {
+    grid-template-columns: 1fr 1fr; /* 👈 Mantener 2 columnas */
+    grid-template-rows: 1fr 1fr; /* 👈 Mantener 2 filas */
+    gap: 12px;
+    padding: 0 16px;
+  }
+  
+  .qc-btn {
+    inline-size: 28px;
+    block-size: 28px;
+    font-size: 20px;
+  }
+}
+
+/* Pantallas muy pequeñas (< 360px) */
+@media (max-width: 360px) {
+  .day-cards-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 0 6px;
+  }
+  
+  .day-cards-container .card {
+    padding: 10px 6px;
+  }
+  
+  /* 👇 Carrusel se mantiene 2x2 */
+  .qc-page {
+    gap: 10px;
+    padding: 0 12px;
+  }
+  
+  .qc-btn {
+    inline-size: 24px;
+    block-size: 24px;
+    font-size: 18px;
   }
 }

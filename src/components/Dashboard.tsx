@@ -116,12 +116,14 @@ export function Dashboard({
             </div>
           </div>
         </div>
-
+        
+        {activeTab === "noche" &&
         <Timeline
           timePoints={timelineData}
           label={timelineLabel}
           className="subcard grid-timeline"
         />
+        }
       </div>
     </div>
   );
