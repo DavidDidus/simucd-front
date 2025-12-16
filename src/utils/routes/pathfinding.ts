@@ -81,7 +81,7 @@ export function aStarPathfinding(
   start: Point,
   goal: Point,
   obstacles: PredefinedObstacle[] = [],
-  maxIterations: number = 5000 // 🔥 Aumentado de 1000 a 5000
+  maxIterations: number = 3000 // Reduced from 5000 to 3000 for better performance
 ): Point[] {
   
   const openList: PathNode[] = [];
