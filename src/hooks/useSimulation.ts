@@ -1,16 +1,42 @@
 import { useState, useMemo } from "react";
 import axios from "axios";
 
+type ScenarioKey = "optimista" | "realista" | "pesimista";
+
+type MonteCarloScenario = {
+  turno_fin_real?: string;
+  resultado?: {
+    turno_noche?: any;
+    turno_dia?: any;
+    [k: string]: any;
+  };
+  [k: string]: any;
+};
+
+type MonteCarloResult = {
+  n_iter?: number;
+  metric?: string;
+  optimista?: MonteCarloScenario;
+  realista?: MonteCarloScenario;
+  pesimista?: MonteCarloScenario;
+};
+
 export function useSimulation() {
-  const [result, setResult] = useState<any>(null);
+  const [baseResult, setBaseResult] = useState<any>(null);                 // simulación rápida (1 corrida)
+  const [mcResult, setMcResult] = useState<MonteCarloResult | null>(null); // resultado Monte Carlo
+  const [selectedScenario, setSelectedScenario] = useState<ScenarioKey>("realista");
+
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingBase, setLoadingBase] = useState(false);      // cargando simulación rápida
+  const [loadingMC, setLoadingMC] = useState(false);          // cargando Monte Carlo
   const [showDashboard, setShowDashboard] = useState(false);
 
+  const isMonteCarlo = useMemo(() => !!mcResult, [mcResult]);
   const API_BASE_URL = import.meta.env.PROD 
   ? "/api" // En producción usa URLs relativas (proxy)
   : "http://localhost:8000"; // En desarrollo directo al backend
 
+  // -------- Normalizador general (endpoint "simple") --------
   function normalizeApiResult(raw: any): { noche: any | null; dia: any | null } {
     if (!raw) return { noche: null, dia: null };
     const data = raw?.data ?? raw;
@@ -34,8 +60,136 @@ export function useSimulation() {
     return { noche: null, dia: null };
   }
 
-  const normalized = useMemo(() => normalizeApiResult(result), [result]);
+  // -------- Normalizador de un ESCENARIO Monte Carlo --------
+  // Estructura esperada: { turno_fin_real, resultado: { turno_noche, turno_dia, ... } }
+  function normalizeMonteCarloScenario(s: MonteCarloScenario | undefined | null): {
+    noche: any | null;
+    dia: any | null;
+  } {
+    if (!s) return { noche: null, dia: null };
 
+    const resultado = s.resultado ?? s; // por si en algún momento se usa sin "resultado"
+
+    const noche = resultado.turno_noche ?? null;
+    const dia = resultado.turno_dia ?? null;
+
+    return { noche, dia };
+  }
+
+  // -------- Resultado actual elegido (optimista/realista/pesimista) --------
+  const selectedResult = useMemo(() => {
+    if (!mcResult) {
+      // mientras no haya Monte Carlo, se usa lo de la simulación rápida
+      return baseResult;
+    }
+
+    const rawScenario = (mcResult as any)[selectedScenario] as MonteCarloScenario;
+    const norm = normalizeMonteCarloScenario(rawScenario);
+
+    // Lo devolvemos con la misma forma que el endpoint normal
+    return {
+      turno_noche: norm.noche,
+      turno_dia: norm.dia,
+    };
+  }, [mcResult, selectedScenario, baseResult]);
+
+  // -------- Normalizado final que consume el Dashboard --------
+  const normalized = useMemo(
+    () => normalizeApiResult(selectedResult),
+    [selectedResult]
+  );
+
+  // -------- Info pequeña para el carrusel (horas de término) --------
+  const scenariosInfo = useMemo(() => {
+    if (!mcResult) return null;
+
+    const mkInfo = (s: MonteCarloScenario | undefined | null) => {
+      if (!s) return { endTimeNoche: null, endTimeDia: null };
+
+      // Usamos el detalle por turno desde resultado.turno_noche/turno_dia
+      const norm = normalizeMonteCarloScenario(s);
+      const noche = norm.noche;
+      const dia = norm.dia;
+
+      return {
+        endTimeNoche: noche?.turno_fin_real ?? null,
+        endTimeDia: dia?.turno_fin_real ?? null,
+      };
+    };
+
+    return {
+      optimista: mkInfo(mcResult.optimista),
+      realista: mkInfo(mcResult.realista),
+      pesimista: mkInfo(mcResult.pesimista),
+    };
+  }, [mcResult]);
+
+  // -------- Payload para ambos endpoints --------
+  function buildPayload(params: any, night: any, dayA: any, dayB: any) {
+    return {
+      "Cajas facturadas": params.cajasFacturadas,
+      "Cajas piqueadas": params.cajasPiqueadas,
+      "Pickers": night.pickers,
+      "Grueros": night.grueros,
+      "Chequeadores": night.chequeadores,
+      "Parrilleros": night.consolidadores,
+      "Camiones": night.camiones,
+      "shifts_day": {
+        "turno_A": {
+          "Pickers": dayA.pickers,
+          "Grueros": dayA.grueros,
+          "Chequeadores": dayA.chequeadores,
+          "Parrilleros": dayA.consolidadores,
+        },
+        "turno_B": {
+          "Pickers": dayB.pickers,
+          "Grueros": dayB.grueros,
+          "Chequeadores": dayB.chequeadores,
+          "Parrilleros": dayB.consolidadores,
+        }
+      }
+    };
+  }
+
+  // ----------- Monte Carlo (segunda llamada, en background) -----------
+  async function runMonteCarlo(params: any, night: any, dayA: any, dayB: any) {
+    try {
+      setLoadingMC(true);
+      setShowDashboard(false);
+
+      const payload = buildPayload(params, night, dayA, dayB);
+
+      const response = await axios.post(
+        `${API_BASE_URL}/simulate`,
+        payload
+      );
+
+      // Backend: { success, data: { metric, n_iter, optimista, realista, pesimista }, message }
+      const data: MonteCarloResult = (response.data as any)?.data ?? response.data;
+
+      setMcResult(data);
+      setSelectedScenario("realista");
+      setShowDashboard(true);
+      console.log("Monte Carlo result:", data);
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const detail = (err.response?.data as any)?.detail;
+        setError(
+          detail ||
+          (err.response?.data as any)?.message ||
+          err.message ||
+          "Error al ejecutar simulación Monte Carlo"
+        );
+      } else {
+        setError("Error al ejecutar simulación Monte Carlo");
+      }
+      console.error("Error Monte Carlo:", err);
+    } finally {
+      setLoadingMC(false);
+    }
+  }
+
+  // ----------- Simulación rápida (primera llamada) -----------
   async function runSimulation(params: any, night: any, dayA: any, dayB: any) {
     if (params.cajasPiqueadas > params.cajasFacturadas) {
       setError("Las cajas piqueadas no pueden ser mayores que las facturadas.");
@@ -43,54 +197,66 @@ export function useSimulation() {
     }
 
     setError(null);
-    setLoading(true);
+    setLoadingBase(true);
+    setMcResult(null);
+    setShowDashboard(false);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/simulate`, {
-        "Cajas facturadas": params.cajasFacturadas,
-        "Cajas piqueadas": params.cajasPiqueadas,
-        "Pickers": night.pickers,
-        "Grueros": night.grueros,
-        "Chequeadores": night.chequeadores,
-        "Parrilleros": night.consolidadores,
-        "Camiones": night.camiones,
-        "shifts_day": {
-          "turno_A": {
-            "Pickers": dayA.pickers,
-            "Grueros": dayA.grueros,
-            "Chequeadores": dayA.chequeadores,
-            "Parrilleros": dayA.consolidadores,
-          },
-          "turno_B": {
-            "Pickers": dayB.pickers,
-            "Grueros": dayB.grueros,
-            "Chequeadores": dayB.chequeadores,
-            "Parrilleros": dayB.consolidadores,
-          }
-        }
-      });
+      const payload = buildPayload(params, night, dayA, dayB);
 
-      setResult(response.data);
-      console.log("Simulation result:", response.data);
-      setShowDashboard(true);
+      const response = await axios.post(
+        `${API_BASE_URL}/simulate`,
+        payload
+      );
+
+      // también puede venir { success, data, message }
+      const data = (response.data as any)?.data ?? response.data;
+
+      setBaseResult(data);
+      console.log("Base simulation result:", data);
+
+      // Disparar Monte Carlo en segundo plano
+      void runMonteCarlo(params, night, dayA, dayB);
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.message || err.message || "Error al ejecutar simulación");
+        const detail = (err.response?.data as any)?.detail;
+        setError(
+          detail ||
+          (err.response?.data as any)?.message ||
+          err.message ||
+          "Error al ejecutar simulación"
+        );
       } else {
         setError("Error al ejecutar simulación");
       }
       console.error("Error:", err);
     } finally {
-      setLoading(false);
+      setLoadingBase(false);
     }
   }
 
   return {
-    result,
+    // resultado rápido para Simulation2D
+    baseResult,
+
+    // resultado normalizado del escenario seleccionado (para Dashboard)
     normalized,
+    selectedResult,
+
+    // info Monte Carlo y selector
+    isMonteCarlo,
+    mcResult,
+    selectedScenario,
+    setSelectedScenario,
+    scenariosInfo,
+
+    // estados
     error,
-    loading,
+    loadingBase,
+    loadingMC,
     showDashboard,
+
+    // acciones
     runSimulation,
   };
 }

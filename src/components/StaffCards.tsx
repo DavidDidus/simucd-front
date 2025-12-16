@@ -8,6 +8,21 @@ import consolidadorImg from "../assets/resources/Consolidador_de_carga .png";
 import chequeadorImg from "../assets/resources/Chequeador.png";
 import camionImg from "../assets/resources/Camion.png";
 
+import personal_subestandar from "../assets/subestandar/Operario_Subestandar.png";
+import liquido_subestandar from "../assets/subestandar/Líquido.png";
+import prv_danado from "../assets/subestandar/PRV_dañado.png";
+import saca_carton from "../assets/subestandar/Sacas_cartón.png";
+import saca_film from "../assets/subestandar/Sacas_film.png";
+import saca_pet from "../assets/subestandar/Sacas_PET.png";
+
+import personal_clasificacion from "../assets/clasificacion/Operario_clasificación.png";
+import entrada_clasificacion from "../assets/clasificacion/Entrada_clasificación.png";
+import entrada_estandarizacion from "../assets/clasificacion/Entrada_Estandarización.png";
+
+import personal_reempaque from "../assets/reempaque/Operario_Reempaque.png";
+import entrada_reempaque from "../assets/reempaque/Entrada_Reempaque.png";
+import entrada_sin_recurso from "../assets/reempaque/Entrada_sin_recurso.png";
+
 interface StaffCardsProps {
   shiftInput: ShiftId;
   editing: boolean;
@@ -69,6 +84,97 @@ export function StaffCards({
           />
         </div>
       </QuadCarousel>
+    );
+  }
+  if ( shiftInput === "Subestándar") {
+    return (
+      <div className={`day-cards-container ${editing ? "hide-on-expand" : ""}`}>
+        <ParamCard
+          label="Personal subestandar"
+          value={currentParams.personal_subestandar}
+          onChange={(v) => onUpdate("personal_subestandar", v)}
+          imgSrc={personal_subestandar}
+        />
+        <ParamCard
+          label="Entradas subestandar"
+          value={currentParams.entrada_subestandar}
+          onChange={(v) => onUpdate("entrada_subestandar", v)}
+          imgSrc={liquido_subestandar}
+        />
+        <ParamCard
+          label="PRV dañado"
+          value={currentParams.prv_danado}
+          onChange={(v) => onUpdate("prv_danado", v)}
+          imgSrc={prv_danado}
+        />
+        <ParamCard
+          label="Sacas cartón"
+          value={currentParams.saca_carton}
+          onChange={(v) => onUpdate("saca_carton", v)}
+          imgSrc={saca_carton}
+        />
+        <ParamCard
+          label="Sacas film"
+          value={currentParams.saca_film}
+          onChange={(v) => onUpdate("saca_film", v)}
+          imgSrc={saca_film}
+        />
+        <ParamCard
+          label="Sacas PET"
+          value={currentParams.saca_pet}
+          onChange={(v) => onUpdate("saca_pet", v)}
+          imgSrc={saca_pet}
+        />
+        
+      </div>
+
+    );
+  } else if (shiftInput === "Reempaque") {
+
+    return (
+      <div className={`day-cards-container ${editing ? "hide-on-expand" : ""}`}>
+        <ParamCard
+          label="Personal de reempaque"
+          value={currentParams.personal_reempaque}
+          onChange={(v) => onUpdate("personal_reempaque", v)}
+          imgSrc={personal_reempaque}
+        />
+        <ParamCard
+          label="Puntos de entrada reempaque"
+          value={currentParams.entrada_reempaque}
+          onChange={(v) => onUpdate("entrada_reempaque", v)}
+          imgSrc={entrada_reempaque}
+        />
+        <ParamCard
+          label="Puntos de entrada sin recurso"
+          value={currentParams.entrada_sin_recurso}
+          onChange={(v) => onUpdate("entrada_sin_recurso", v)}
+          imgSrc={entrada_sin_recurso}
+        />
+      </div>
+    );
+  } else if (shiftInput === "Clasificación") {
+    return (
+      <div className={`day-cards-container ${editing ? "hide-on-expand" : ""}`}>
+        <ParamCard
+          label="Personal de clasificación"
+          value={currentParams.personal_clasificacion}
+          onChange={(v) => onUpdate("personal_clasificacion", v)}
+          imgSrc={personal_clasificacion}
+        />
+        <ParamCard
+          label="Entradas de clasificación"
+          value={currentParams.entrada_clasificacion}
+          onChange={(v) => onUpdate("entrada_clasificacion", v)}
+          imgSrc={entrada_clasificacion}
+        />
+        <ParamCard
+          label="Puntos de estandarización"
+          value={currentParams.entrada_estandarizacion}
+          onChange={(v) => onUpdate("entrada_estandarizacion", v)}
+          imgSrc={entrada_estandarizacion}
+        />
+      </div>
     );
   }
 

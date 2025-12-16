@@ -15,3 +15,95 @@
 
 /* Animations */
 @import './styles/animations/transitions.css';
+
+.scenario-carousel {
+  position: relative;       /* necesario para las flechas absolutas */
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;  /* centra el contenido del título */
+  align-items: center;
+}
+
+/* Flechas a los bordes */
+.scenario-carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+
+  border: none;
+  border-radius: 999px;
+  width: 36px;
+  height: 36px;
+  font-size: 22px;
+  cursor: pointer;
+
+  background: #e5f3e1; /* verde suave */
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.1s ease;
+}
+
+/* Izquierda */
+.scenario-carousel-arrow.left {
+  left: 0;
+}
+
+/* Derecha */
+.scenario-carousel-arrow.right {
+  right: 0;
+}
+
+.scenario-carousel-arrow:hover:not(:disabled) {
+  transform: translateY(-50%) scale(1.05);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.scenario-carousel-arrow:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Bloque central */
+.scenario-carousel-center {
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: #f4fbf2;
+  border: 1px solid #cfe7c9;
+  text-align: center;
+  min-width: 180px;
+}
+
+.scenario-carousel-title {
+  font-weight: 600;
+  color: black;
+  font-size: 0.95rem;
+}
+
+.scenario-carousel-subtitle {
+  font-size: 0.75rem;
+  color: #5f6b5f;
+  margin-top: 2px;
+}
+
+.progress-container {
+  margin-top: 12px;
+}
+
+.progress-label {
+  font-size: 0.8rem;
+  color: #4a4a4a;
+  margin-bottom: 4px;
+}
+
+.progress-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #e5e7eb; /* gris claro */
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #22c55e; /* verde */
+  transition: width 0.2s ease-out;
+}
