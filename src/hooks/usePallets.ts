@@ -110,9 +110,9 @@ type CranePalletEvent = {
   };
 
 // Convierte "HH:MM" -> segundos
-function hmToSeconds(hm: string): number {
+function hmToSeconds(hm: string): number | null {
   const [h, m] = hm.split(':').map(Number);
-  if (Number.isNaN(h) || Number.isNaN(m)) return 0;
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
   return h * 3600 + m * 60;
 }
 
