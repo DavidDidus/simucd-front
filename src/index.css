@@ -12,6 +12,7 @@
 @import './styles/components/carousel.css';
 @import './styles/components/dashboard.css';
 @import './styles/components/tabs.css';
+@import './styles/components/history.css';
 
 /* Animations */
 @import './styles/animations/transitions.css';

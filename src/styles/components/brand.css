@@ -1,7 +1,37 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
 .brand {
   letter-spacing: .6rem;
   font-size: clamp(26px, 3.4vw, 46px);
   color: #e8f1eb;
   font-weight: 600;
   margin-bottom: 22px;
+}
+
+.topbar .brand {
+  margin-bottom: 0; /* evita doble separación dentro del topbar */
+}
+
+.history-btn {
+  background: #f3faf5;
+  color: #0f172a;
+  border: 1px solid #dfe9e2;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter .2s ease, transform .2s ease, background .2s ease;
+}
+
+.history-btn:hover {
+  filter: brightness(1.03);
+  transform: translateY(-1px);
+}
+
+.history-btn:active {
+  transform: translateY(0);
 }

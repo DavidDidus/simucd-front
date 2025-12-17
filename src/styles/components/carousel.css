@@ -105,6 +105,41 @@
   min-width: 140px;
   max-width: 220px;
 }
+
+/* Subestándar: centrar y máximo 3 por fila */
+.day-cards-container.subestandar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 220px)); /* máx. 3 columnas */
+
+  /* Aumenta solo la separación horizontal */
+  column-gap: clamp(24px, 3vw, 36px);
+
+  /* Mantén la separación vertical (ajústala si quieres) */
+  row-gap: 12px;
+
+  justify-content: center;
+  justify-items: center;
+  align-items: stretch;
+  margin: 0 auto;
+}
+
+/* Tablets: 2 por fila */
+@media (max-width: 900px) {
+  .day-cards-container.subestandar {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+    column-gap: 20px; /* horizontal */
+    row-gap: 12px;    /* vertical */
+  }
+}
+
+/* Móviles: 2 por fila */
+@media (max-width: 480px) {
+  .day-cards-container.subestandar {
+    grid-template-columns: repeat(2, 1fr);
+    column-gap: 16px;
+    row-gap: 10px;
+  }
+}
 @media (max-width: 1200px) and (min-width: 901px) {
   .day-cards-container {
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

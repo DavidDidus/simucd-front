@@ -125,7 +125,7 @@ export function useSimulation() {
   }, [mcResult]);
 
   // -------- Payload para ambos endpoints --------
-  function buildPayload(params: any, night: any, dayA: any, dayB: any) {
+  function buildPayload(params: any, night: any, dayA: any, dayB: any, simulationId: string | null = null) {
     return {
       "Cajas facturadas": params.cajasFacturadas,
       "Cajas piqueadas": params.cajasPiqueadas,
@@ -147,20 +147,23 @@ export function useSimulation() {
           "Chequeadores": dayB.chequeadores,
           "Parrilleros": dayB.consolidadores,
         }
-      }
+      },
+      "simulation_id": simulationId
     };
   }
 
   // ----------- Monte Carlo (segunda llamada, en background) -----------
-  async function runMonteCarlo(params: any, night: any, dayA: any, dayB: any) {
+  async function runMonteCarlo(params: any, night: any, dayA: any, dayB: any, simulationId: string | null = null) {
     try {
       setLoadingMC(true);
       setShowDashboard(false);
 
-      const payload = buildPayload(params, night, dayA, dayB);
+      const payload = buildPayload(params, night, dayA, dayB, simulationId);
+
+      console.log("Running Monte Carlo with payload:", payload);
 
       const response = await axios.post(
-        `${API_BASE_URL}/simulate`,
+        `${API_BASE_URL}/simulate-montecarlo`,
         payload
       );
 
@@ -170,7 +173,6 @@ export function useSimulation() {
       setMcResult(data);
       setSelectedScenario("realista");
       setShowDashboard(true);
-      console.log("Monte Carlo result:", data);
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const detail = (err.response?.data as any)?.detail;
@@ -212,11 +214,13 @@ export function useSimulation() {
       // también puede venir { success, data, message }
       const data = (response.data as any)?.data ?? response.data;
 
+      const simulationId = (response.data as any)?.data?.simulation_id ?? null;
+      console.log("Simulation ID:", simulationId);
       setBaseResult(data);
       console.log("Base simulation result:", data);
 
       // Disparar Monte Carlo en segundo plano
-      void runMonteCarlo(params, night, dayA, dayB);
+      void runMonteCarlo(params, night, dayA, dayB, simulationId);
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const detail = (err.response?.data as any)?.detail;

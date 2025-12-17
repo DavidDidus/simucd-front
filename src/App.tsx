@@ -12,8 +12,10 @@ import { useShiftParams } from "./hooks/useShiftParams";
 import { buildUtilization, buildTimeline, getStaffValues } from "./utils/dataUtils";
 import Simulation2D from "./components/simulation/Simulation2D";
 import ProgressBar from "./components/ProgressBar";
+import SimulationHistory from "./components/SimulationHistory";
 
 const LS_KEY = "simucd-params";
+const HISTORY_KEY = "simucd-history";
 
 const initial: Params = {
   pickers: 8,
@@ -45,10 +47,12 @@ export default function App() {
   });
 
   const [shiftInput, setShiftInput] = useState<ShiftId>("noche");
-  const [activeTab, setActiveTab] = useState<TabId>("diaA");
+  const [activeTab, setActiveTab] = useState<TabId>("noche");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showSim2D, setShowSim2D] = useState(false);
   const [pressed, setPressed] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
 
   const { night, dayA, dayB, getCurrentParams, updateShiftParam } = useShiftParams(params);
   const { editing, bigCardRef, openEditor, collapseEditor } = useCardAnimation();
@@ -154,6 +158,46 @@ export default function App() {
   }, [loadingBase, loadingMC]);
 
 
+  function appendHistoryRecord() {
+  try {
+    const now = new Date();
+    const record = {
+      id: crypto.randomUUID?.() ?? `${now.getTime()}`,
+      timestamp: now.toISOString(),
+      date: now.toISOString().slice(0, 10),
+      time: now.toTimeString().slice(0,5),
+      cajasFacturadas: params.cajasFacturadas,
+      cajasPiqueadas: params.cajasPiqueadas,
+      night,
+      dayA,
+      dayB,
+      subestandar: {
+        personal_subestandar: params.personal_subestandar,
+        entrada_subestandar: params.entrada_subestandar,
+        prv_danado: params.prv_danado,
+        saca_carton: params.saca_carton,
+        saca_film: params.saca_film,
+        saca_pet: params.saca_pet,
+      },
+      clasificacion: {
+        personal_clasificacion: params.personal_clasificacion,
+        entrada_clasificacion: params.entrada_clasificacion,
+        entrada_estandarizacion: params.entrada_estandarizacion,
+      },
+      reempaque: {
+        personal_reempaque: params.personal_reempaque,
+        entrada_reempaque: params.entrada_reempaque,
+        entrada_sin_recurso: params.entrada_sin_recurso,
+      },
+    };
+    const raw = localStorage.getItem(HISTORY_KEY);
+    const prev = raw ? JSON.parse(raw) : [];
+    const next = [record, ...prev];
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  } catch (e) {
+    console.warn("No se pudo guardar historial:", e);
+  }
+}
   function set<K extends keyof Params>(key: K, value: number) {
     setParams((p) => ({ ...p, [key]: value }));
   }
@@ -276,13 +320,27 @@ export default function App() {
     }
 
     setValidationError(null);
+    appendHistoryRecord();
     runSimulation(params, night, dayA, dayB);
   }
 
   return (
     <div className="page">
-      <header className="brand">SIMUCD</header>
+      <div className="topbar">
+        <header className="brand">SIMUCD</header>
+        <button
+          className="history-btn"
+          onClick={() => setShowHistory(s => !s)}
+          aria-label={showHistory ? "Volver a simulación" : "Abrir historial"}
+        >
+          {showHistory ? "Volver" : "Historial"}
+        </button>
+      </div>
 
+      {showHistory ? (
+  <SimulationHistory />
+) : (
+  <>
       <ShiftInputTabs value={shiftInput} onChange={setShiftInput} />
 
       <main className={`grid ${editing ? "editing" : ""}`}>
@@ -391,6 +449,8 @@ export default function App() {
           />
         )}
       </section>
+  </>
+)}
     </div>
   );
 }
