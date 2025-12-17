@@ -1,5 +1,4 @@
 import type { PredefinedRoute } from './routes';
-import { PARKING_ZONES } from '../../types/parkingSlot';
 import { findTransitionPath } from './pathfinding';
 import type { Point } from '../../types';
 import type { PredefinedObstacle } from '../../types/obstacles';

@@ -34,6 +34,9 @@ export interface WaitTimePoint {
 export function buildWaitTimeChartData(
   tiempos: Record<string, number>
 ): WaitTimePoint[] {
+   if (!tiempos) {
+    return [];
+  }
   const labelMap: Record<string, string> = {
     picker: "Picker",
     grua: "Gruero",

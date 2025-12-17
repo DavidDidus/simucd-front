@@ -88,33 +88,33 @@ export function StaffCards({
   }
   if ( shiftInput === "Subestándar") {
     return (
-      <div className={`day-cards-container ${editing ? "hide-on-expand" : ""}`}>
+      <div className={`day-cards-container subestandar ${editing ? "hide-on-expand" : ""}`}>
         <ParamCard
-          label="Personal subestandar"
+          label="Operarios"
           value={currentParams.personal_subestandar}
           onChange={(v) => onUpdate("personal_subestandar", v)}
           imgSrc={personal_subestandar}
         />
         <ParamCard
-          label="Entradas subestandar"
+          label="Cajas de Liquidos"
           value={currentParams.entrada_subestandar}
           onChange={(v) => onUpdate("entrada_subestandar", v)}
           imgSrc={liquido_subestandar}
         />
         <ParamCard
-          label="PRV dañado"
+          label="Pallets PRV Dañada"
           value={currentParams.prv_danado}
           onChange={(v) => onUpdate("prv_danado", v)}
           imgSrc={prv_danado}
         />
         <ParamCard
-          label="Sacas cartón"
+          label="Sacas Cartón"
           value={currentParams.saca_carton}
           onChange={(v) => onUpdate("saca_carton", v)}
           imgSrc={saca_carton}
         />
         <ParamCard
-          label="Sacas film"
+          label="Sacas Film"
           value={currentParams.saca_film}
           onChange={(v) => onUpdate("saca_film", v)}
           imgSrc={saca_film}
