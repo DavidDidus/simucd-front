@@ -1,6 +1,6 @@
 import { useState } from "react";
-import latasCCUImg from "../assets/resources/Latas_CCU.png";
-import type { Params } from "../types";
+import latasCCUImg from "../../assets/resources/Latas_CCU.png";
+import type { Params } from "../../types";
 
 interface BigCardProps {
   bigCardRef: React.RefObject<HTMLDivElement | null>  ;

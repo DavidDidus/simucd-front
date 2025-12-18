@@ -2,17 +2,18 @@ import { useState, useEffect } from "react";
 import type { Params } from "./types";
 import ShiftInputTabs from "./components/ShiftInputTabs";
 import type { ShiftId } from "./components/ShiftInputTabs";
-import type { TabId } from "./components/Tabs";
-import { BigCard } from "./components/BigCard";
+import type { TabId } from "./components/layout/Tabs";
+import { BigCard } from "./components/layout/BigCard";
 import { StaffCards } from "./components/StaffCards";
-import { Dashboard } from "./components/Dashboard";
+import { SimulationDashboard } from "./components/dashboard/SimulationDashboard";
+import  SubestandarDashboard  from "./components/dashboard/SubestandarDashboard";
 import { useSimulation } from "./hooks/useSimulation";
 import { useCardAnimation } from "./hooks/useCardAnimation";
 import { useShiftParams } from "./hooks/useShiftParams";
 import { buildUtilization, buildTimeline, getStaffValues } from "./utils/dataUtils";
 import Simulation2D from "./components/simulation/Simulation2D";
-import ProgressBar from "./components/ProgressBar";
-import SimulationHistory from "./components/SimulationHistory";
+import ProgressBar from "./components/charts/ProgressBar";
+import SimulationHistory from "./components/simulation/SimulationHistory";
 
 const LS_KEY = "simucd-params";
 const HISTORY_KEY = "simucd-history";
@@ -54,7 +55,7 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
 
 
-  const { night, dayA, dayB, getCurrentParams, updateShiftParam } = useShiftParams(params);
+  const { night, dayA, dayB, subestandar ,getCurrentParams, updateShiftParam } = useShiftParams(params);
   const { editing, bigCardRef, openEditor, collapseEditor } = useCardAnimation();
 
   const {
@@ -69,6 +70,9 @@ export default function App() {
     selectedScenario,
     setSelectedScenario,
     scenariosInfo,
+    subestandarResult,
+    showDashboardSubestandar,
+    runSubestandarSimulation,
   } = useSimulation();
 
   const [progress, setProgress] = useState(0);
@@ -309,19 +313,25 @@ export default function App() {
       return;
     }
 
+    if (shiftInput === "noche" || shiftInput === "diaA" || shiftInput === "diaB" || shiftInput === "Clasificación") {
     // toggle para mostrar/ocultar la simulación 2D
-    if (!pressed) {
-      setShowSim2D(true);
-      setPressed(true);
-    } else {
-      console.log("Already pressed");
-      setShowSim2D(false);
-      setPressed(false);
-    }
+      if (!pressed) {
+        setShowSim2D(true);
+        setPressed(true);
+      } else {
+        console.log("Already pressed");
+        setShowSim2D(false);
+        setPressed(false);
+      }
 
-    setValidationError(null);
-    appendHistoryRecord();
-    runSimulation(params, night, dayA, dayB);
+      setValidationError(null);
+      appendHistoryRecord();
+
+      runSimulation(params, night, dayA, dayB);
+    }else if(shiftInput === "Subestándar"){
+      runSubestandarSimulation(subestandar);
+    }
+  
   }
 
   return (
@@ -388,9 +398,11 @@ export default function App() {
           <div style={{ marginTop: 12 }}>
             <Simulation2D
               running
-              resources={{ noche: night.grueros,
-        turnoA: dayA.grueros,
-        turnoB: dayB.grueros,}}
+              resources={{ 
+                noche: night.grueros,
+                turnoA: dayA.grueros,
+                turnoB: dayB.grueros,
+              }}
               // simulación rápida (1 corrida)
               backendResponse={baseResult}
             />
@@ -437,17 +449,25 @@ export default function App() {
       )}
 
         {showDashboard && (
-          <Dashboard
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            chartData={chartData}
-            waitChartData={waitChartData}
-            kpis={kpis}
-            timelineData={timelineData}
-            timelineLabel={timelineLabel}
-            norm={normalized}
-          />
-        )}
+  <SimulationDashboard
+    activeTab={activeTab}
+    onTabChange={setActiveTab}
+    chartData={chartData}
+    waitChartData={waitChartData}
+    kpis={kpis}
+    timelineData={timelineData}
+    timelineLabel={timelineLabel}
+    norm={normalized}
+  />
+)}
+
+{showDashboardSubestandar && subestandarResult && (
+  <div className="subestandar-dashboard">
+      <SubestandarDashboard
+        result={subestandarResult}
+      />
+  </div>
+)}
       </section>
   </>
 )}

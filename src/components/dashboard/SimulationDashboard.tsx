@@ -1,10 +1,10 @@
-import BarChart from "./BarChart";
-import Timeline from "./Timeline";
-import Tabs from "./Tabs";
-import type { TabId } from "./Tabs";
-import { getFormattedActiveTime } from "../utils/dataUtils";
-import WaitBarChart from "./WaitTimeBarChart";
-import { buildWaitTimeChartData } from "../utils/time";
+import BarChart from "../charts/BarChart";
+import Timeline from "../Timeline";
+import Tabs from "../layout/Tabs";
+import type { TabId } from "../layout/Tabs";
+import { getFormattedActiveTime } from "../../utils/dataUtils";
+import WaitBarChart from "../charts/WaitTimeBarChart";
+import { buildWaitTimeChartData } from "../../utils/time";
 
 interface DashboardProps {
   activeTab: TabId;
@@ -25,7 +25,7 @@ interface DashboardProps {
   norm: any;
 }
 
-export function Dashboard({
+export function SimulationDashboard({
   activeTab,
   onTabChange,
   chartData,
@@ -35,7 +35,6 @@ export function Dashboard({
   timelineLabel,
   norm,
 }: DashboardProps) {
-  const waitTimeChartData = buildWaitTimeChartData(waitChartData);
   
   return (
     <div

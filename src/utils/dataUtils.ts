@@ -1,4 +1,4 @@
-import type { TabId } from "../components/Tabs";
+import type { TabId } from "../components/layout/Tabs";
 
 export function readOccupation(
   rec: any,

@@ -1,5 +1,5 @@
 import { ParamCard } from "./ParamCard";
-import QuadCarousel from "./CardCarousel";
+import QuadCarousel from "./layout/CardCarousel";
 import type { ShiftId } from "./ShiftInputTabs";
 
 import pickerImg from "../assets/resources/Picker.png";

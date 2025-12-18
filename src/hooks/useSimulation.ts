@@ -25,11 +25,12 @@ export function useSimulation() {
   const [baseResult, setBaseResult] = useState<any>(null);                 // simulación rápida (1 corrida)
   const [mcResult, setMcResult] = useState<MonteCarloResult | null>(null); // resultado Monte Carlo
   const [selectedScenario, setSelectedScenario] = useState<ScenarioKey>("realista");
-
   const [error, setError] = useState<string | null>(null);
   const [loadingBase, setLoadingBase] = useState(false);      // cargando simulación rápida
   const [loadingMC, setLoadingMC] = useState(false);          // cargando Monte Carlo
   const [showDashboard, setShowDashboard] = useState(false);
+  const [showDashboardSubestandar, setShowDashboardSubestandar] = useState(false);
+  const [subestandarResult, setSubestandarResult] = useState<any>(null);
 
   const isMonteCarlo = useMemo(() => !!mcResult, [mcResult]);
   const API_BASE_URL = import.meta.env.PROD 
@@ -173,6 +174,7 @@ export function useSimulation() {
       setMcResult(data);
       setSelectedScenario("realista");
       setShowDashboard(true);
+      setShowDashboardSubestandar(false);
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const detail = (err.response?.data as any)?.detail;
@@ -215,7 +217,6 @@ export function useSimulation() {
       const data = (response.data as any)?.data ?? response.data;
 
       const simulationId = (response.data as any)?.data?.simulation_id ?? null;
-      console.log("Simulation ID:", simulationId);
       setBaseResult(data);
       console.log("Base simulation result:", data);
 
@@ -239,9 +240,56 @@ export function useSimulation() {
     }
   }
 
+  async function runSubestandarSimulation(params:any) {
+    setError(null);
+    setLoadingBase(true);
+    setShowDashboardSubestandar(false);
+
+    try {
+      const payload = {
+        "n_operarios": params.personal_subestandar,
+        "cajas_liquidos": params.entrada_subestandar,
+        "unidades_carton": params.saca_carton,
+        "unidades_film": params.saca_film,
+        "unidades_pet": params.saca_pet,
+        "unidades_prv": params.prv_danado,
+      };
+      console.log("Running Subestandar with payload:", payload);  
+      const response = await axios.post(
+        `${API_BASE_URL}/subestandar/run`,
+        payload
+      );
+
+      const data = (response.data as any)?.data ?? response.data;
+
+      setSubestandarResult(data);
+      setShowDashboardSubestandar(true);
+      setShowDashboard(false);
+      console.log("Subestandar simulation result:", data);
+    }
+    catch (err) {
+      if (axios.isAxiosError(err)) {
+        const detail = (err.response?.data as any)?.detail;
+        setError(
+          detail ||
+          (err.response?.data as any)?.message ||
+          err.message ||
+          "Error al ejecutar simulación de subestándar"
+        );
+      } else {
+        setError("Error al ejecutar simulación de subestándar");
+      }
+      console.error("Error Subestandar:", err);
+    } finally {
+      setLoadingBase(false);
+    }
+    
+  }
+
   return {
     // resultado rápido para Simulation2D
     baseResult,
+    subestandarResult,
 
     // resultado normalizado del escenario seleccionado (para Dashboard)
     normalized,
@@ -259,8 +307,10 @@ export function useSimulation() {
     loadingBase,
     loadingMC,
     showDashboard,
+    showDashboardSubestandar,
 
     // acciones
     runSimulation,
+    runSubestandarSimulation,
   };
 }
