@@ -14,6 +14,7 @@ import { buildUtilization, buildTimeline, getStaffValues } from "./utils/dataUti
 import Simulation2D from "./components/simulation/Simulation2D";
 import ProgressBar from "./components/charts/ProgressBar";
 import SimulationHistory from "./components/simulation/SimulationHistory";
+import ReempaqueDashboard from "./components/dashboard/ReempaqueDashboard";
 
 const LS_KEY = "simucd-params";
 const HISTORY_KEY = "simucd-history";
@@ -55,7 +56,7 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
 
 
-  const { night, dayA, dayB, subestandar ,getCurrentParams, updateShiftParam } = useShiftParams(params);
+  const { night, dayA, dayB, subestandar, reempaque,clasificacion ,getCurrentParams, updateShiftParam } = useShiftParams(params);
   const { editing, bigCardRef, openEditor, collapseEditor } = useCardAnimation();
 
   const {
@@ -73,6 +74,11 @@ export default function App() {
     subestandarResult,
     showDashboardSubestandar,
     runSubestandarSimulation,
+    clasificacionResult,
+    showDashboardClasificacion,
+    showDashboardReempaque,
+    runReempaqueSimulation,
+    reempaqueResult,
   } = useSimulation();
 
   const [progress, setProgress] = useState(0);
@@ -327,11 +333,14 @@ export default function App() {
       setValidationError(null);
       appendHistoryRecord();
 
-      runSimulation(params, night, dayA, dayB);
+      runSimulation(params, night, dayA, dayB, clasificacion);
     }else if(shiftInput === "Subestándar"){
+      setShowSim2D(false);
       runSubestandarSimulation(subestandar);
+    } else if(shiftInput === "Reempaque"){
+      setShowSim2D(false);
+      runReempaqueSimulation(reempaque);
     }
-  
   }
 
   return (
@@ -448,26 +457,47 @@ export default function App() {
         </div>
       )}
 
-        {showDashboard && (
-  <SimulationDashboard
-    activeTab={activeTab}
-    onTabChange={setActiveTab}
-    chartData={chartData}
-    waitChartData={waitChartData}
-    kpis={kpis}
-    timelineData={timelineData}
-    timelineLabel={timelineLabel}
-    norm={normalized}
-  />
-)}
+        {showDashboard && showDashboardClasificacion ? (
+          <SimulationDashboard
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            chartData={chartData}
+            waitChartData={waitChartData}   
+            kpis={kpis}
+            timelineData={timelineData}
+            timelineLabel={timelineLabel}
+            norm={normalized}
+            clasificacionResult={clasificacionResult}
+          />
+        ) : showDashboard && (
+          <SimulationDashboard
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            chartData={chartData}
+            waitChartData={waitChartData}
+            kpis={kpis}
+            timelineData={timelineData}
+            timelineLabel={timelineLabel}
+            norm={normalized}
+            clasificacionResult={null}
+          />
+        )}
 
-{showDashboardSubestandar && subestandarResult && (
-  <div className="subestandar-dashboard">
-      <SubestandarDashboard
-        result={subestandarResult}
-      />
-  </div>
-)}
+        {showDashboardSubestandar && subestandarResult && (
+          <div className="subestandar-dashboard">
+              <SubestandarDashboard
+                result={subestandarResult}
+              />
+          </div>
+        )}
+
+        {showDashboardReempaque && reempaqueResult && (
+          <div className="subestandar-dashboard">
+              <ReempaqueDashboard
+                result={reempaqueResult}
+              />
+          </div>
+        )}
       </section>
   </>
 )}

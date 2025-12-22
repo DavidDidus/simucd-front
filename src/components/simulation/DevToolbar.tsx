@@ -1,5 +1,4 @@
 // src/components/simulation/DevToolbar.tsx
-import React from 'react';
 import type { ShiftResources } from '../../types';
 import { CAN_EDIT } from '../../utils/env';
 
