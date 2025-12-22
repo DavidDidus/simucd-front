@@ -1,6 +1,6 @@
 import type { RouteTransition } from '../utils/routes/scheduledRoutes';
 
-import camionDistribucion from '../assets/Simulacion/Camioon_abastecimiento.png';
+import camionDistribucion from '../assets/Simulacion/Camion_abastecimiento.png';
 import grua_horquilla from '../assets/Simulacion/GRUA_HORQUILLA.png';
 import camion_1 from '../assets/Simulacion/T2 VERDE OSCURO.png';
 import camionT1 from '../assets/Simulacion/T1_AZUL.png';
