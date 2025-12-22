@@ -1370,19 +1370,6 @@ useEffect(() => {
         return prev;
       }
 
-      // 🔹 determinar desde qué zonas tomar pallets
-      let sourceZoneIds: string[] = [];
-
-      if (ev.source === 'distribucion') {
-        sourceZoneIds = ['download-distribution-zone'];
-      } else {
-        // source === 't1'
-        // Los pallets T1 fueron creados en download-t1-t2-zone-N (según slot del camión).
-        // Tomamos los que están asignados a ese camión y estén en cualquier download-t1-t2-zone-*
-        // (así no dependemos de "N" si el camión cambió o si tienes varios slots).
-        sourceZoneIds = []; // lo filtramos por prefijo más abajo
-      }
-
       // Pallets elegibles: en el piso, sin tránsito programado aún
       const candidates = prev
         .map((p, idx) => ({ p, idx }))

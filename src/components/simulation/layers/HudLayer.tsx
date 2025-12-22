@@ -9,7 +9,7 @@ type Props = {
   activeCount: number;
 };
 
-export default function HudLayer({ w, clock, shiftLabel, resources, activeCount }: Props) {
+export default function HudLayer({ w, clock }: Props) {
   return (
     <Layer listening={false}>
       <Group x={0} y={8}>
