@@ -35,9 +35,7 @@ import DevToolbar from './DevToolbar';
 import { useSimulationEngine } from '../../hooks/useSimulationEngine';
 import { PALLET_SPAWN_POINTS } from '../../types/pallets';
 import type { RuntimePallet } from '../../types/pallets';
-import { findNearestFreeSlotInZone, occupySlot, releaseSlot  } from '../../utils/parkingUtils';
 
-import grua_horquilla from '../../assets/Simulacion/GRUA_HORQUILLA.png';
 import pallet_icon from '../../assets/Simulacion/PALLET.png'; 
 
 type EditMode = 'route' | 'obstacle';
@@ -134,13 +132,6 @@ type T1FinalCheckEvent = {
   camionId: string;
   startAtSec: number;
   durationSec: number;
-};
-
-
-type T2ReturnEvent = {
-  key: string;
-  camionId: string;   // "E71"
-  startAtSec: number; // 09:26
 };
 
 type T2EntryV2Event = {

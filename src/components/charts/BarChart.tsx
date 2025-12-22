@@ -10,6 +10,7 @@ export type BarChartProps = {
   height?: number;
   showValues?: boolean;
   showUtilization?: boolean;
+  showColors?: boolean;
 };
 
 const BarChart: React.FC<BarChartProps> = ({
@@ -21,6 +22,7 @@ const BarChart: React.FC<BarChartProps> = ({
   height = 260,
   showValues = true,
   showUtilization = true,
+  showColors = true,
 }) => {
   const width = 600;
   const margin = { top: 28, right: 20, bottom: 38, left: 40 };
@@ -32,8 +34,8 @@ const BarChart: React.FC<BarChartProps> = ({
 
   // Función para obtener color según el porcentaje de utilización
   const getUtilizationColor = (percent: number) => {
-    if (percent >= 90) return "#9b1c1c"; // Rojo - sobreutilizado
-    if (percent >= 70) return "#f59e0b"; // Amarillo - alta utilización
+    if (percent >= 90 && showColors) return "#9b1c1c"; // Rojo - sobreutilizado
+    if (percent >= 70 && showColors) return "#f59e0b"; // Amarillo - alta utilización
     return "#56963a"; // Verde - utilización normal
   };
 
