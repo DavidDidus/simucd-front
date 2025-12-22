@@ -1,3 +1,4 @@
+import React from 'react';
 import type { ActorType } from '../../types/actors';
 import { ACTOR_DEFINITIONS } from '../../types/actors';
 

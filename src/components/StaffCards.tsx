@@ -134,19 +134,19 @@ export function StaffCards({
     return (
       <div className={`day-cards-container ${editing ? "hide-on-expand" : ""}`}>
         <ParamCard
-          label="Operarios"
+          label="Personal de reempaque"
           value={currentParams.personal_reempaque}
           onChange={(v) => onUpdate("personal_reempaque", v)}
           imgSrc={personal_reempaque}
         />
         <ParamCard
-          label="Cajas a Procesar"
+          label="Puntos de entrada reempaque"
           value={currentParams.entrada_reempaque}
           onChange={(v) => onUpdate("entrada_reempaque", v)}
           imgSrc={entrada_reempaque}
         />
         <ParamCard
-          label="Cajas Iniciales"
+          label="Puntos de entrada sin recurso"
           value={currentParams.entrada_sin_recurso}
           onChange={(v) => onUpdate("entrada_sin_recurso", v)}
           imgSrc={entrada_sin_recurso}
@@ -157,19 +157,19 @@ export function StaffCards({
     return (
       <div className={`day-cards-container ${editing ? "hide-on-expand" : ""}`}>
         <ParamCard
-          label="Operarios"
+          label="Personal de clasificación"
           value={currentParams.personal_clasificacion}
           onChange={(v) => onUpdate("personal_clasificacion", v)}
           imgSrc={personal_clasificacion}
         />
         <ParamCard
-          label="Cajas a Clasificar"
+          label="Entradas de clasificación"
           value={currentParams.entrada_clasificacion}
           onChange={(v) => onUpdate("entrada_clasificacion", v)}
           imgSrc={entrada_clasificacion}
         />
         <ParamCard
-          label="Cajas a Estandarizar"
+          label="Puntos de estandarización"
           value={currentParams.entrada_estandarizacion}
           onChange={(v) => onUpdate("entrada_estandarizacion", v)}
           imgSrc={entrada_estandarizacion}

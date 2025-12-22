@@ -1,4 +1,4 @@
-export type TabId = "noche" | "diaA" | "diaB" | "Clasificación";
+export type TabId = "noche" | "diaA" | "diaB";
 
 export interface TabDef {
   id: TabId;

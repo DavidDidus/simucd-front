@@ -19,7 +19,7 @@ export function useActorStates(
     if (actorsLoading) return;
 
     const actorTypesData = Object.entries(actorCounts)
-  .filter(([_, count]) => count > 0)
+  .filter(([type, count]) => count > 0)
   .filter(([type]) => type !== 'truckT1') // 👈 no asignar parking normal a T1
   .map(([type, count]) => ({ type: type as ActorType, count }));
 

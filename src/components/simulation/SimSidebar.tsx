@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { ShiftResources, Shift } from '../../types';
+import { PREDEFINED_ROUTES, type PredefinedRoute } from '../../utils/routes/routes';
 
 export interface SimSidebarProps {
   simTimeSec: number;
@@ -20,13 +21,17 @@ export default function SimSidebar({
   simTimeSec,
   speedMult,
   onSpeedChange,
+  resources,
   currentShift,
+  selectedRouteId,
+  onRouteSelect,
   min = 1,
   max = 100,
   step = 1,
   className,
   style,
 }: SimSidebarProps) {
+  const [showRoutes, setShowRoutes] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onSpeedChange(Number(e.target.value));

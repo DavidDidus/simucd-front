@@ -30,11 +30,7 @@ export function useSimulation() {
   const [loadingMC, setLoadingMC] = useState(false);          // cargando Monte Carlo
   const [showDashboard, setShowDashboard] = useState(false);
   const [showDashboardSubestandar, setShowDashboardSubestandar] = useState(false);
-  const [showDashboardReempaque, setShowDashboardReempaque] = useState(false);
-  const [showDashboardClasificacion, setShowDashboardClasificacion] = useState(false);
   const [subestandarResult, setSubestandarResult] = useState<any>(null);
-  const [clasificacionResult, setClasificacionResult] = useState<any>(null);
-  const [reempaqueResult, setReempaqueResult] = useState<any>(null);
 
   const isMonteCarlo = useMemo(() => !!mcResult, [mcResult]);
   const API_BASE_URL = import.meta.env.PROD 
@@ -198,7 +194,7 @@ export function useSimulation() {
   }
 
   // ----------- Simulación rápida (primera llamada) -----------
-  async function runSimulation(params: any, night: any, dayA: any, dayB: any, clasificacion: any) {
+  async function runSimulation(params: any, night: any, dayA: any, dayB: any) {
     if (params.cajasPiqueadas > params.cajasFacturadas) {
       setError("Las cajas piqueadas no pueden ser mayores que las facturadas.");
       return;
@@ -207,10 +203,7 @@ export function useSimulation() {
     setError(null);
     setLoadingBase(true);
     setMcResult(null);
-    setShowDashboardSubestandar(false);
     setShowDashboard(false);
-    setShowDashboardClasificacion(false);
-    setShowDashboardReempaque(false);
 
     try {
       const payload = buildPayload(params, night, dayA, dayB);
@@ -225,29 +218,6 @@ export function useSimulation() {
 
       const simulationId = (response.data as any)?.data?.simulation_id ?? null;
       setBaseResult(data);
-      
-      if(clasificacion.personal_clasificacion > 0 || clasificacion.entrada_clasificacion > 0 || clasificacion.entrada_estandarizacion > 0){
-        const clasificacionPayload = {
-          "num_operarios": clasificacion.personal_clasificacion,
-          "pallets_cl_manual": clasificacion.entrada_clasificacion,
-          "pallets_est_manual": clasificacion.entrada_estandarizacion,
-          "cajas_vendidas": params.cajasFacturadas,
-        };
-        console.log("Running Clasificacion with payload:", clasificacionPayload);
-
-        const response = await axios.post(
-          `${API_BASE_URL}/clasificacion/simulate`,
-          clasificacionPayload
-        );
-        const data = (response.data as any)?.data ?? response.data;
-
-        setShowDashboardClasificacion(true);
-        setClasificacionResult(data);
-        console.log("Clasificacion simulation result:", data);
-      }else{
-        setShowDashboardClasificacion(false);
-      }
-
       console.log("Base simulation result:", data);
 
       // Disparar Monte Carlo en segundo plano
@@ -274,9 +244,6 @@ export function useSimulation() {
     setError(null);
     setLoadingBase(true);
     setShowDashboardSubestandar(false);
-    setShowDashboard(false);
-    setShowDashboardClasificacion(false);
-    setShowDashboardReempaque(false);
 
     try {
       const payload = {
@@ -319,57 +286,10 @@ export function useSimulation() {
     
   }
 
-  async function runReempaqueSimulation(reempaque:any) {
-    setError(null);
-    setLoadingBase(true);
-    setShowDashboardSubestandar(false);
-    setShowDashboard(false);
-    setShowDashboardClasificacion(false);
-    setShowDashboardReempaque(false);
-    try {
-      const payload = {
-        "num_operarios": reempaque.personal_reempaque,
-        "cajas_nuevas": reempaque.entrada_reempaque,
-        "stock_inicial": reempaque.entrada_sin_recurso,
-        "hay_maquilador": true
-      };
-      console.log("Running Reempaque with payload:", payload);  
-      const response = await axios.post(
-        `${API_BASE_URL}/reempaque/simulate`,
-        payload
-      );
-      const data = (response.data as any)?.data ?? response.data;
-
-      setReempaqueResult(data);
-      setShowDashboardReempaque(true);
-      console.log("Reempaque simulation result:", data);
-    }
-    catch (err) {
-      if (axios.isAxiosError(err)) {
-        const detail = (err.response?.data as any)?.detail;
-        setError(
-          detail ||
-          (err.response?.data as any)?.message ||
-          err.message ||
-          "Error al ejecutar simulación de reempaque"
-        );
-      } else {
-        setError("Error al ejecutar simulación de reempaque");
-      }
-      console.error("Error Reempaque:", err);
-    }
-    finally {
-      setLoadingBase(false);
-    }      
-  };
-
-
   return {
     // resultado rápido para Simulation2D
     baseResult,
     subestandarResult,
-    clasificacionResult,
-    reempaqueResult,
 
     // resultado normalizado del escenario seleccionado (para Dashboard)
     normalized,
@@ -388,13 +308,9 @@ export function useSimulation() {
     loadingMC,
     showDashboard,
     showDashboardSubestandar,
-    showDashboardReempaque,
-    showDashboardClasificacion,
-   
 
     // acciones
     runSimulation,
     runSubestandarSimulation,
-    runReempaqueSimulation,
   };
 }

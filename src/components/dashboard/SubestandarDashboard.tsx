@@ -139,6 +139,8 @@ export default function SubestandarDashboard({
     faltantes: m.faltantes,
   }));
 
+  const incompletos = mats.filter((m) => m.current < m.total);
+
   return (
     <div className="dash-card card-with-tabs">
       <div className="dashboard-grid in-card subestandar-grid">
@@ -190,7 +192,6 @@ export default function SubestandarDashboard({
           labels={prodChart.labels}
           values={prodChart.values}
           utilization={prodChart.utilization}
-          showColors={false}
           className="subcard grid-chart"
         />
 
@@ -200,7 +201,6 @@ export default function SubestandarDashboard({
           labels={utilChart.labels}
           values={utilChart.values}
           utilization={utilChart.utilization}
-          showColors={false}
           className="subcard grid-wait-chart"
         />
 

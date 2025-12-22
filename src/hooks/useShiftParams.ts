@@ -71,8 +71,6 @@ export function useShiftParams(initialParams: any) {
     dayA,
     dayB,
     subestandar,
-    clasificacion,
-    reempaque,
     getCurrentParams,
     updateShiftParam,
   };

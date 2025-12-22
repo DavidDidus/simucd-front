@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface WaitBarChartProps {
   data: Record<string, number> | null | undefined;
@@ -52,6 +52,7 @@ export default function WaitBarChart({
   // --- refs para alinear el eje con las barras ---
   const labelRef = useRef<HTMLDivElement | null>(null);
   const valueRef = useRef<HTMLDivElement | null>(null);
+  const [labelWidth, setLabelWidth] = useState(0);
   const [valueWidth, setValueWidth] = useState(0);
 
   useEffect(() => {
@@ -60,6 +61,7 @@ export default function WaitBarChart({
     if (!l && !v) return;
 
     const update = () => {
+      if (l) setLabelWidth(l.offsetWidth);
       if (v) setValueWidth(v.offsetWidth);
     };
 
