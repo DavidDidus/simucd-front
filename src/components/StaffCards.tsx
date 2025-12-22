@@ -7,17 +7,16 @@ import grueroImg from "../assets/resources/Gruero.png";
 import consolidadorImg from "../assets/resources/Consolidador_de_carga .png";
 import chequeadorImg from "../assets/resources/Chequeador.png";
 import camionImg from "../assets/resources/Camion.png";
-
 import personal_subestandar from "../assets/subestandar/Operario_subestandar.png";
-import liquido_subestandar from "../assets/subestandar/Líquido.png";
-import prv_danado from "../assets/subestandar/PRV_dañado.png";
-import saca_carton from "../assets/subestandar/Sacas_cartón.png";
+import liquido_subestandar from "../assets/subestandar/Liquido.png";
+import prv_danado from "../assets/subestandar/PRV_danado.png";
+import saca_carton from "../assets/subestandar/Sacas_carton.png";
 import saca_film from "../assets/subestandar/Sacas_film.png";
 import saca_pet from "../assets/subestandar/Sacas_PET.png";
 
-import personal_clasificacion from "../assets/clasificacion/Operario_clasificación.png";
-import entrada_clasificacion from "../assets/clasificacion/Entrada_clasificación.png";
-import entrada_estandarizacion from "../assets/clasificacion/Entrada_Estandarización.png";
+import personal_clasificacion from "../assets/clasificacion/Operario_clasificacion.png";
+import entrada_clasificacion from "../assets/clasificacion/Entrada_clasificacion.png";
+import entrada_estandarizacion from "../assets/clasificacion/Entrada_Estandarizacion.png";
 
 import personal_reempaque from "../assets/reempaque/Operario_Reempaque.png";
 import entrada_reempaque from "../assets/reempaque/Entrada_Reempaque.png";
