@@ -311,37 +311,47 @@ export default function App() {
   }
 
 
-  function handleRunSimulation() {
-    const validationMessage = validateResources();
+function handleRunSimulation() {
+  if(pressed)
+  if (loadingBase || loadingMC) return; // evita doble clic durante ejecución
 
-    if (validationMessage) {
-      setValidationError(validationMessage);
-      return;
-    }
-
-    if (shiftInput === "noche" || shiftInput === "diaA" || shiftInput === "diaB" || shiftInput === "Clasificación") {
-    // toggle para mostrar/ocultar la simulación 2D
-      if (!pressed) {
-        setShowSim2D(true);
-        setPressed(true);
-      } else {
-        console.log("Already pressed");
-        setShowSim2D(false);
-        setPressed(false);
-      }
-
-      setValidationError(null);
-      appendHistoryRecord();
-
-      runSimulation(params, night, dayA, dayB, clasificacion);
-    }else if(shiftInput === "Subestándar"){
-      setShowSim2D(false);
-      runSubestandarSimulation(subestandar);
-    } else if(shiftInput === "Reempaque"){
-      setShowSim2D(false);
-      runReempaqueSimulation(reempaque);
-    }
+  const validationMessage = validateResources();
+  if (validationMessage) {
+    setValidationError(validationMessage);
+    return;
   }
+
+  setValidationError(null);
+  appendHistoryRecord();
+
+  const is2DShift =
+    shiftInput === "noche" ||
+    shiftInput === "diaA" ||
+    shiftInput === "diaB" ||
+    shiftInput === "Clasificación";
+
+  if (is2DShift) {
+    // Siempre mostrar la simulación 2D al correr
+    if (!showSim2D) setShowSim2D(true);
+    // 'pressed' ya no es necesario para toggle
+    setPressed(true);
+    runSimulation(params, night, dayA, dayB, clasificacion);
+    return;
+  }
+
+  // Otros módulos: no muestran la 2D
+  setShowSim2D(false);
+  setPressed(false);
+
+  if (shiftInput === "Subestándar") {
+    runSubestandarSimulation(subestandar);
+    return;
+  }
+
+  if (shiftInput === "Reempaque") {
+    runReempaqueSimulation(reempaque);
+  }
+}
 
   return (
     <div className="page">
