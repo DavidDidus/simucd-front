@@ -59,10 +59,20 @@ export const PARKING_ZONES: ParkingZone[] = [
         { id: 'slot-25', x: 0.748, y: 0.685, rotation: 90, occupied: false },
         { id: 'slot-28', x: 0.788, y: 0.660, rotation: 90, occupied: false },
         { id: 'slot-27', x: 0.748, y: 0.660, rotation: 90, occupied: false },
-        { id: 'slot-30', x: 0.788, y: 0.635, rotation: 90, occupied: false },
         { id: 'slot-29', x: 0.748, y: 0.635, rotation: 90, occupied: false },
-
+        { id: 'slot-30', x: 0.788, y: 0.635, rotation: 90, occupied: false },
+        { id: 'slot-31', x: 0.748, y: 0.610, rotation: 90, occupied: false },
+        { id: 'slot-32', x: 0.788, y: 0.610, rotation: 90, occupied: false },
+        { id: 'slot-33', x: 0.748, y: 0.585, rotation: 90, occupied: false },
+        { id: 'slot-34', x: 0.788, y: 0.585, rotation: 90, occupied: false },
+        { id: 'slot-35', x: 0.748, y: 0.560, rotation: 90, occupied: false },
+        { id: 'slot-36', x: 0.788, y: 0.560, rotation: 90, occupied: false },
+        { id: 'slot-37', x: 0.748, y: 0.535, rotation: 90, occupied: false },
+        { id: 'slot-38', x: 0.788, y: 0.535, rotation: 90, occupied: false },
+        { id: 'slot-39', x: 0.748, y: 0.510, rotation: 90, occupied: false },
+        { id: 'slot-40', x: 0.788, y: 0.510, rotation: 90, occupied: false },
     ],
+    allowedTypes: ['truck1', 'truck2', 'truck3', 'truck4']
   },
   {
     id: 'zone-load',

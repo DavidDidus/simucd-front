@@ -171,6 +171,12 @@ export default function App() {
     };
   }, [loadingBase, loadingMC]);
 
+  useEffect(() => {
+  if (error) {
+    console.error('[SIMUCD Error]', error);
+    // Opcional: enviar a analytics/logging
+  }
+}, [error]);
 
  function appendHistoryRecord(
   kind: 'turnos' | 'reempaque' | 'subestandar',
@@ -511,7 +517,11 @@ async function downloadDashboardAsImage(elementId: string, filename: string) {
   )}
 
   {validationError && <p className="error">{validationError}</p>}
-  {error && <p className="error">{error}</p>}
+  {error && (
+  <p className="error">
+    Ocurrió un problema al ejecutar la simulación. Por favor, intenta nuevamente.
+  </p>
+)}
 
   {showSim2D && (
     <div style={{ marginTop: 12 }}>

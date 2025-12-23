@@ -46,7 +46,7 @@ export function generateRouteJSON(
   }
 ): string {
   const route: PredefinedRoute = {
-    id: `route-${name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
+    id: `route-${name.toLowerCase().replace(/\s+/g, "-")}`,
     name,
     description,
     points,

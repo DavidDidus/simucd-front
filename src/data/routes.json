@@ -2235,6 +2235,166 @@
     }
   ],
   "priority": 1
+},
+{
+  "id": "route-parking-31-patio",
+  "name": "parking-31-patio",
+  "description": "parking-31-patio",
+  "points": [
+    {
+      "x": 0.7491207502930832,
+      "y": 0.61083984375
+    },
+    {
+      "x": 0.7045720984759671,
+      "y": 0.60927734375
+    }
+  ],
+  "priority": 1
+},
+{
+  "id": "route-parking-32-patio",
+  "name": "parking-32-patio",
+  "description": "parking-32-patio",
+  "points": [
+    {
+      "x": 0.7901524032825322,
+      "y": 0.6181315064430237
+    },
+    {
+      "x": 0.7198124267291911,
+      "y": 0.6212565064430237
+    }
+  ],
+  "priority": 1
+},
+{
+  "id": "route-parking-33-patio",
+  "name": "parking-33-patio",
+  "description": "parking-33-patio",
+  "points": [
+    {
+      "x": 0.7456037514654161,
+      "y": 0.5853190064430237
+    },
+    {
+      "x": 0.716295427901524,
+      "y": 0.5759440064430237
+    }
+  ],
+  "priority": 1
+},
+{
+  "id": "route-parking-34-patio",
+  "name": "parking-34-patio",
+  "description": "parking-34-patio",
+  "points": [
+    {
+      "x": 0.7889800703399765,
+      "y": 0.5868815064430237
+    },
+    {
+      "x": 0.7280187573270809,
+      "y": 0.5884440064430236
+    }
+  ],
+  "priority": 1
+},
+{
+  "id": "route-parking-35-patio",
+  "name": "parking-35-patio",
+  "description": "parking-35-patio",
+  "points": [
+    {
+      "x": 0.7479484173505275,
+      "y": 0.5634440064430237
+    },
+    {
+      "x": 0.7151230949589683,
+      "y": 0.5650065064430236
+    }
+  ],
+  "priority": 1
+},
+{
+  "id": "route-parking-36-patio",
+  "name": "parking-36-patio",
+  "description": "parking-36-patio",
+  "points": [
+    {
+      "x": 0.7866354044548651,
+      "y": 0.5650065064430236
+    },
+    {
+      "x": 0.6811254396248535,
+      "y": 0.5759440064430237
+    }
+  ],
+  "priority": 1
+},
+{
+  "id": "route-parking-37-patio",
+  "name": "parking-37-patio",
+  "description": "parking-37-patio",
+  "points": [
+    {
+      "x": 0.7491207502930832,
+      "y": 0.5384440064430237
+    },
+    {
+      "x": 0.6963657678780774,
+      "y": 0.5368815064430237
+    }
+  ],
+  "priority": 1
+},
+{
+  "id": "route-parking-38-patio",
+  "name": "parking-38-patio",
+  "description": "parking-38-patio",
+  "points": [
+    {
+      "x": 0.7889800703399765,
+      "y": 0.5384440064430237
+    },
+    {
+      "x": 0.712778429073857,
+      "y": 0.5400065064430237
+    }
+  ],
+  "priority": 1
+},
+{
+  "id": "route-parking-39-patio",
+  "name": "parking-39-patio",
+  "description": "parking-39-patio",
+  "points": [
+    {
+      "x": 0.7456037514654161,
+      "y": 0.5087565064430237
+    },
+    {
+      "x": 0.7221570926143025,
+      "y": 0.5196940064430237
+    }
+  ],
+  "priority": 1
+},
+{
+  "id": "route-parking-40-patio",
+  "name": "parking-40-patio",
+  "description": "parking-40-patio",
+  "points": [
+    {
+      "x": 0.7913247362250879,
+      "y": 0.5103190064430236
+    },
+    {
+      "x": 0.7069167643610785,
+      "y": 0.5134440064430237
+    }
+  ],
+  "priority": 1
 }
   ]
 } 

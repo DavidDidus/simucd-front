@@ -51,6 +51,16 @@ export const SLOT_TO_ROUTE_MAP: Record<string, string> = {
   'slot-28': 'route-parking-28-patio',
   'slot-29': 'route-parking-29-patio',
   'slot-30': 'route-parking-30-patio',
+  'slot-31': 'route-parking-31-patio',
+  'slot-32': 'route-parking-32-patio',
+  'slot-33': 'route-parking-33-patio',
+  'slot-34': 'route-parking-34-patio',
+  'slot-35': 'route-parking-35-patio',
+  'slot-36': 'route-parking-36-patio',
+  'slot-37': 'route-parking-37-patio',
+  'slot-38': 'route-parking-38-patio',
+  'slot-39': 'route-parking-39-patio',
+  'slot-40': 'route-parking-40-patio',
 };
 
 export const LOAD_TO_ROUTE_MAP: Record<string, string> = {
