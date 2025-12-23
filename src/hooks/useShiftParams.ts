@@ -12,7 +12,7 @@ export function useShiftParams(initialParams: any) {
     camiones: initialParams.camiones,
   });
 
-  const [dayA, setDayA] = useState({ ...night });
+  const [dayA, setDayA] = useState({ ...night, retorno_pallets: initialParams.retorno_pallets });
   const [dayB, setDayB] = useState({ ...night });
   const [subestandar, setSubestandar] = useState({
     personal_subestandar: initialParams.personal_subestandar,

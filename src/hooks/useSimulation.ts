@@ -153,7 +153,8 @@ export function useSimulation() {
           "Parrilleros": dayB.consolidadores,
         }
       },
-      "simulation_id": simulationId
+      "simulation_id": simulationId,
+      "retorno_pallets": dayA.retorno_pallets,
     };
   }
 

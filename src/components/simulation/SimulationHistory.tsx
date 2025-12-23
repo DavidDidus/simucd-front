@@ -16,11 +16,11 @@ type SimulationRecord = {
   timestamp: string;
   date: string;
   time: string;
-  cajasFacturadas: number;
-  cajasPiqueadas: number;
-  night: ShiftRes;
-  dayA: ShiftRes;
-  dayB: ShiftRes;
+  cajasFacturadas?: number;
+  cajasPiqueadas?: number;
+  night?: ShiftRes;
+  dayA?: ShiftRes;
+  dayB?: ShiftRes;
   subestandar?: AuxFlow;
   clasificacion?: AuxFlow;
   reempaque?: AuxFlow;
@@ -38,9 +38,16 @@ type AuxKey = { key: string; label: string };
 function AuxLines({ flow, keys }: { flow?: AuxFlow; keys: AuxKey[] }) {
   if (!flow) return <div className="hv-muted">—</div>;
 
+  // Filtrar solo las claves con valores > 0
+  const filledKeys = keys.filter(({ key }) => (flow[key] ?? 0) > 0);
+
+  if (filledKeys.length === 0) {
+    return <div className="hv-muted">—</div>;
+  }
+
   return (
     <div className="hv-lines">
-      {keys.map(({ key, label }) => (
+      {filledKeys.map(({ key, label }) => (
         <div key={key} className="hv-line">
           <span className="hv-line-k">{label}</span>
           <span className="hv-line-v">{flow[key] ?? 0}</span>
@@ -91,6 +98,18 @@ export default function SimulationHistory() {
     { key: "entrada_sin_recurso", label: "Sin rec." },
   ];
 
+  // Determinar tipo de simulación
+  function getSimType(item: SimulationRecord): 'turnos' | 'reempaque' | 'subestandar' | 'mixed' {
+    const hasTurnos = !!(item.night || item.dayA || item.dayB);
+    const hasReempaque = !!item.reempaque;
+    const hasSubestandar = !!item.subestandar;
+
+    if (hasTurnos) return 'turnos';
+    if (hasReempaque) return 'reempaque';
+    if (hasSubestandar) return 'subestandar';
+    return 'mixed';
+  }
+
   return (
     <div className="hv">
       <div className="hv-header">
@@ -102,67 +121,90 @@ export default function SimulationHistory() {
         <div className="hv-empty">Aún no hay simulaciones guardadas.</div>
       ) : (
         <div className="hv-list">
-          {items.map((item) => (
-            <div key={item.id} className="hv-card">
-              <div className="hv-row">
-                <Block title="Fecha">
-                  <div className="hv-strong hv-mono">{item.date}</div>
-                  <div className="hv-subtitle">Hora</div>
-                  <div className="hv-strong hv-mono">{item.time}</div>
-                </Block>
+          {items.map((item) => {
+            const simType = getSimType(item);
+            const showVentas = simType === 'turnos';
+            const showTurnos = simType === 'turnos';
+            const showClasificacion = simType === 'turnos' && item.clasificacion;
+            const showReempaque = simType === 'reempaque';
+            const showSubestandar = simType === 'subestandar';
 
-                <div className="hv-divider" />
+            return (
+              <div key={item.id} className="hv-card">
+                <div className="hv-row">
+                  <Block title="Fecha">
+                    <div className="hv-strong hv-mono">{item.date}</div>
+                    <div className="hv-subtitle">Hora</div>
+                    <div className="hv-strong hv-mono">{item.time}</div>
+                  </Block>
 
-                <Block title="Ventas">
-                  <div className="hv-line">
-                    <span className="hv-line-k">Facturadas</span>
-                    <span className="hv-line-v hv-strong">{item.cajasFacturadas}</span>
-                  </div>
-                  <div className="hv-line">
-                    <span className="hv-line-k">Piqueadas</span>
-                    <span className="hv-line-v hv-strong">{item.cajasPiqueadas}</span>
-                  </div>
-                </Block>
+                  <div className="hv-divider" />
 
-                <div className="hv-divider" />
+                  {showVentas && (
+                    <>
+                      <Block title="Ventas">
+                        <div className="hv-line">
+                          <span className="hv-line-k">Facturadas</span>
+                          <span className="hv-line-v hv-strong">{item.cajasFacturadas ?? 0}</span>
+                        </div>
+                        <div className="hv-line">
+                          <span className="hv-line-k">Piqueadas</span>
+                          <span className="hv-line-v hv-strong">{item.cajasPiqueadas ?? 0}</span>
+                        </div>
+                      </Block>
 
-                <Block title="Turnos">
-                  <div className="hv-shift">
-                    <div className="hv-shift-k">Noche</div>
-                    <div className="hv-shift-v hv-mono">{formatShiftLine(item.night)}</div>
-                  </div>
+                      <div className="hv-divider" />
+                    </>
+                  )}
 
-                  <div className="hv-shift">
-                    <div className="hv-shift-k">Día A</div>
-                    <div className="hv-shift-v hv-mono">{formatShiftLine(item.dayA)}</div>
-                  </div>
+                  {showTurnos && (
+                    <>
+                      <Block title="Turnos">
+                        <div className="hv-shift">
+                          <div className="hv-shift-k">Noche</div>
+                          <div className="hv-shift-v hv-mono">{formatShiftLine(item.night)}</div>
+                        </div>
 
-                  <div className="hv-shift">
-                    <div className="hv-shift-k">Día B</div>
-                    <div className="hv-shift-v hv-mono">{formatShiftLine(item.dayB)}</div>
-                  </div>
-                </Block>
+                        <div className="hv-shift">
+                          <div className="hv-shift-k">Día A</div>
+                          <div className="hv-shift-v hv-mono">{formatShiftLine(item.dayA)}</div>
+                        </div>
 
-                <div className="hv-divider" />
+                        <div className="hv-shift">
+                          <div className="hv-shift-k">Día B</div>
+                          <div className="hv-shift-v hv-mono">{formatShiftLine(item.dayB)}</div>
+                        </div>
+                      </Block>
 
-                <Block title="Clasificación">
-                  <AuxLines flow={item.clasificacion} keys={CLA_KEYS} />
-                </Block>
+                      <div className="hv-divider" />
+                    </>
+                  )}
 
-                <div className="hv-divider" />
+                  {showClasificacion && (
+                    <>
+                      <Block title="Clasificación">
+                        <AuxLines flow={item.clasificacion} keys={CLA_KEYS} />
+                      </Block>
 
-                <Block title="Reempaque">
-                  <AuxLines flow={item.reempaque} keys={REE_KEYS} />
-                </Block>
+                      <div className="hv-divider" />
+                    </>
+                  )}
 
-                <div className="hv-divider" />
+                  {showReempaque && (
+                    <Block title="Reempaque">
+                      <AuxLines flow={item.reempaque} keys={REE_KEYS} />
+                    </Block>
+                  )}
 
-                <Block title="Subestándar">
-                  <AuxLines flow={item.subestandar} keys={SUB_KEYS} />
-                </Block>
+                  {showSubestandar && (
+                    <Block title="Subestándar">
+                      <AuxLines flow={item.subestandar} keys={SUB_KEYS} />
+                    </Block>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

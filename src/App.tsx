@@ -15,6 +15,8 @@ import Simulation2D from "./components/simulation/Simulation2D";
 import ProgressBar from "./components/charts/ProgressBar";
 import SimulationHistory from "./components/simulation/SimulationHistory";
 import ReempaqueDashboard from "./components/dashboard/ReempaqueDashboard";
+import html2canvas from 'html2canvas';
+import { InfoModal } from "./components/InfoModal";
 
 const LS_KEY = "simucd-params";
 const HISTORY_KEY = "simucd-history";
@@ -39,6 +41,7 @@ const initial: Params = {
   saca_carton: 1,
   saca_film: 1,
   saca_pet: 1,
+  retorno_pallets: false,
   
 };
 
@@ -54,6 +57,7 @@ export default function App() {
   const [showSim2D, setShowSim2D] = useState(false);
   const [pressed, setPressed] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
 
 
   const { night, dayA, dayB, subestandar, reempaque,clasificacion ,getCurrentParams, updateShiftParam } = useShiftParams(params);
@@ -168,38 +172,61 @@ export default function App() {
   }, [loadingBase, loadingMC]);
 
 
-  function appendHistoryRecord() {
+ function appendHistoryRecord(
+  kind: 'turnos' | 'reempaque' | 'subestandar',
+  opts?: { includeClasificacion?: boolean }
+) {
   try {
     const now = new Date();
-    const record = {
+    const base = {
       id: crypto.randomUUID?.() ?? `${now.getTime()}`,
       timestamp: now.toISOString(),
       date: now.toISOString().slice(0, 10),
-      time: now.toTimeString().slice(0,5),
+      time: now.toTimeString().slice(0, 5),
       cajasFacturadas: params.cajasFacturadas,
       cajasPiqueadas: params.cajasPiqueadas,
-      night,
-      dayA,
-      dayB,
-      subestandar: {
-        personal_subestandar: params.personal_subestandar,
-        entrada_subestandar: params.entrada_subestandar,
-        prv_danado: params.prv_danado,
-        saca_carton: params.saca_carton,
-        saca_film: params.saca_film,
-        saca_pet: params.saca_pet,
-      },
-      clasificacion: {
-        personal_clasificacion: params.personal_clasificacion,
-        entrada_clasificacion: params.entrada_clasificacion,
-        entrada_estandarizacion: params.entrada_estandarizacion,
-      },
-      reempaque: {
-        personal_reempaque: params.personal_reempaque,
-        entrada_reempaque: params.entrada_reempaque,
-        entrada_sin_recurso: params.entrada_sin_recurso,
-      },
     };
+
+    let record: any = { ...base };
+
+    if (kind === 'turnos') {
+      record = {
+        ...base,
+        night,
+        dayA,
+        dayB,
+      };
+
+      if (opts?.includeClasificacion) {
+        record.clasificacion = {
+          personal_clasificacion: params.personal_clasificacion,
+          entrada_clasificacion: params.entrada_clasificacion,
+          entrada_estandarizacion: params.entrada_estandarizacion,
+        };
+      }
+    } else if (kind === 'reempaque') {
+      record = {
+        ...base,
+        reempaque: {
+          personal_reempaque: params.personal_reempaque,
+          entrada_reempaque: params.entrada_reempaque,
+          entrada_sin_recurso: params.entrada_sin_recurso,
+        },
+      };
+    } else if (kind === 'subestandar') {
+      record = {
+        ...base,
+        subestandar: {
+          personal_subestandar: params.personal_subestandar,
+          entrada_subestandar: params.entrada_subestandar,
+          prv_danado: params.prv_danado,
+          saca_carton: params.saca_carton,
+          saca_film: params.saca_film,
+          saca_pet: params.saca_pet,
+        },
+      };
+    }
+
     const raw = localStorage.getItem(HISTORY_KEY);
     const prev = raw ? JSON.parse(raw) : [];
     const next = [record, ...prev];
@@ -254,37 +281,39 @@ export default function App() {
 
   function validateResources(): string | null {
     // Validar cajas
-    if (params.cajasFacturadas < params.cajasPiqueadas) {
-      return "Las cajas pickeadas no pueden ser mayores que las facturadas";
-    }
-    if (params.cajasFacturadas === 0) {
-      return "Las cajas facturadas no pueden ser 0";
-    }
-    if (params.cajasPiqueadas === 0) {
-      return "Las cajas pickeadas no pueden ser 0";
-    }
-    if (params.cajasPiqueadas > params.cajasFacturadas) {
-      return "Las cajas pickeadas no pueden ser mayores que las facturadas";
-    }
+    if(activeTab === "noche" || activeTab === "diaA" || activeTab === "diaB") {
+      if (params.cajasFacturadas < params.cajasPiqueadas) {
+        return "Las cajas pickeadas no pueden ser mayores que las facturadas";
+      }
+      if (params.cajasFacturadas === 0) {
+        return "Las cajas facturadas no pueden ser 0";
+      }
+      if (params.cajasPiqueadas === 0) {
+        return "Las cajas pickeadas no pueden ser 0";
+      }
+      if (params.cajasPiqueadas > params.cajasFacturadas) {
+        return "Las cajas pickeadas no pueden ser mayores que las facturadas";
+      }
 
-    // Validar recursos noche
-    if (night.pickers === 0) return "Los Pickers (noche) no pueden ser 0";
-    if (night.grueros === 0) return "Los Grueros (noche) no pueden ser 0";
-    if (night.chequeadores === 0) return "Los Chequeadores (noche) no pueden ser 0";
-    if (night.consolidadores === 0) return "Los Consolidadores (noche) no pueden ser 0";
-    if (night.camiones === 0) return "Los Camiones (noche) no pueden ser 0";
+      // Validar recursos noche
+      if (night.pickers === 0) return "Los Pickers (noche) no pueden ser 0";
+      if (night.grueros === 0) return "Los Grueros (noche) no pueden ser 0";
+      if (night.chequeadores === 0) return "Los Chequeadores (noche) no pueden ser 0";
+      if (night.consolidadores === 0) return "Los Consolidadores (noche) no pueden ser 0";
+      if (night.camiones === 0) return "Los Camiones (noche) no pueden ser 0";
 
-    // Validar recursos día A
-    if (dayA.pickers === 0) return "Los Pickers (Turno A) no pueden ser 0";
-    if (dayA.grueros === 0) return "Los Grueros (Turno A) no pueden ser 0";
-    if (dayA.chequeadores === 0) return "Los Chequeadores (Turno A) no pueden ser 0";
-    if (dayA.consolidadores === 0) return "Los Consolidadores (Turno A) no pueden ser 0";
+      // Validar recursos día A
+      if (dayA.pickers === 0) return "Los Pickers (Turno A) no pueden ser 0";
+      if (dayA.grueros === 0) return "Los Grueros (Turno A) no pueden ser 0";
+      if (dayA.chequeadores === 0) return "Los Chequeadores (Turno A) no pueden ser 0";
+      if (dayA.consolidadores === 0) return "Los Consolidadores (Turno A) no pueden ser 0";
 
-    // Validar recursos día B
-    if (dayB.pickers === 0) return "Los Pickers (Turno B) no pueden ser 0";
-    if (dayB.grueros === 0) return "Los Grueros (Turno B) no pueden ser 0";
-    if (dayB.chequeadores === 0) return "Los Chequeadores (Turno B) no pueden ser 0";
-    if (dayB.consolidadores === 0) return "Los Consolidadores (Turno B) no pueden ser 0";
+      // Validar recursos día B
+      if (dayB.pickers === 0) return "Los Pickers (Turno B) no pueden ser 0";
+      if (dayB.grueros === 0) return "Los Grueros (Turno B) no pueden ser 0";
+      if (dayB.chequeadores === 0) return "Los Chequeadores (Turno B) no pueden ser 0";
+      if (dayB.consolidadores === 0) return "Los Consolidadores (Turno B) no pueden ser 0";
+    }
 
     return null;
   }
@@ -312,8 +341,8 @@ export default function App() {
 
 
 function handleRunSimulation() {
-  if(pressed)
-  if (loadingBase || loadingMC) return; // evita doble clic durante ejecución
+  if (pressed) // ← faltaba "return" o ";" aquí
+  if (loadingBase || loadingMC) return;
 
   const validationMessage = validateResources();
   if (validationMessage) {
@@ -322,7 +351,6 @@ function handleRunSimulation() {
   }
 
   setValidationError(null);
-  appendHistoryRecord();
 
   const is2DShift =
     shiftInput === "noche" ||
@@ -331,9 +359,16 @@ function handleRunSimulation() {
     shiftInput === "Clasificación";
 
   if (is2DShift) {
+    // Decidir si clasificación se incluirá en historial
+    const includeClasificacion =
+      (clasificacion.personal_clasificacion ?? 0) > 0 ||
+      (clasificacion.entrada_clasificacion ?? 0) > 0 ||
+      (clasificacion.entrada_estandarizacion ?? 0) > 0;
+
+    appendHistoryRecord('turnos', { includeClasificacion });
+
     // Siempre mostrar la simulación 2D al correr
     if (!showSim2D) setShowSim2D(true);
-    // 'pressed' ya no es necesario para toggle
     setPressed(true);
     runSimulation(params, night, dayA, dayB, clasificacion);
     return;
@@ -344,32 +379,83 @@ function handleRunSimulation() {
   setPressed(false);
 
   if (shiftInput === "Subestándar") {
+    appendHistoryRecord('subestandar');
     runSubestandarSimulation(subestandar);
     return;
   }
 
   if (shiftInput === "Reempaque") {
+    appendHistoryRecord('reempaque');
     runReempaqueSimulation(reempaque);
   }
 }
 
+
+async function downloadDashboardAsImage(elementId: string, filename: string) {
+  try {
+    const element = document.getElementById(elementId);
+    if (!element) {
+      console.warn('Elemento no encontrado');
+      return;
+    }
+
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      logging: false,
+      backgroundColor: '#ffffff',
+    });
+
+    const link = document.createElement('a');
+    link.href = canvas.toDataURL('image/png');
+    link.download = `${filename}-${new Date().toISOString().slice(0, 10)}.png`;
+    link.click();
+  } catch (err) {
+    console.error('Error descargando dashboard:', err);
+  }
+}
   return (
     <div className="page">
       <div className="topbar">
-        <header className="brand">SIMUCD</header>
-        <button
-          className="history-btn"
-          onClick={() => setShowHistory(s => !s)}
-          aria-label={showHistory ? "Volver a simulación" : "Abrir historial"}
-        >
-          {showHistory ? "Volver" : "Historial"}
-        </button>
-      </div>
+        <div className="brand-container">
+          <header className="brand">SIMUCD</header>
+          <button
+            className="info-btn"
+            onClick={() => setShowInfo(s => !s)}
+            title="Información sobre SIMUCD"
+            aria-label="Información"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="11" x2="12" y2="16" />
+              <circle cx="12" cy="8" r="1.5" />
+            </svg>
+          </button>
+        </div>
+      <button
+        className="history-btn"
+        onClick={() => setShowHistory(s => !s)}
+        aria-label={showHistory ? "Volver a simulación" : "Abrir historial"}
+      >
+      {showHistory ? "Volver" : "Historial"}
+      </button>
+    </div>
+    {showInfo && (
+      <InfoModal isOpen={showInfo} onClose={() => setShowInfo(false)} />
+    )}
 
-      {showHistory ? (
-  <SimulationHistory />
-) : (
-  <>
+          {showHistory ? (
+      <SimulationHistory />
+    ) : (
+      <>
       <ShiftInputTabs value={shiftInput} onChange={setShiftInput} />
 
       <main className={`grid ${editing ? "editing" : ""}`}>
@@ -394,39 +480,56 @@ function handleRunSimulation() {
       </main>
 
       <section className={`panel ${editing ? "hide-on-expand" : ""}`}>
-        <button
-          className="run-btn"
-          onClick={handleRunSimulation}
-          disabled={loadingBase || loadingMC}
-        >
-          {loadingBase
-            ? "Ejecutando simulación..."
-            : loadingMC
-            ? "Calculando escenarios..."
-            : "Ejecutar simulación"}
-        </button>
-        
-        {showProgress && (
-          <ProgressBar value={progress} label={progressLabel} />
-        )}
+  <div className="buttons-container">
+    <button
+      className="run-btn"
+      onClick={handleRunSimulation}
+      disabled={loadingBase || loadingMC}
+    >
+      {loadingBase
+        ? "Ejecutando simulación..."
+        : loadingMC
+        ? "Calculando escenarios..."
+        : "Ejecutar simulación"}
+    </button>
+    
+    <button 
+      onClick={() => downloadDashboardAsImage('dashboard-container', 'resultado-simulacion')}
+      className="download-btn"
+      title="Descargar Dashboard"
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+    </button>
+  </div>
+  
+  {showProgress && (
+    <ProgressBar value={progress} label={progressLabel} />
+  )}
 
-        {validationError && <p className="error">{validationError}</p>}
-        {error && <p className="error">{error}</p>}
+  {validationError && <p className="error">{validationError}</p>}
+  {error && <p className="error">{error}</p>}
 
-        {showSim2D && (
-          <div style={{ marginTop: 12 }}>
-            <Simulation2D
-              running
-              resources={{ 
-                noche: night.grueros,
-                turnoA: dayA.grueros,
-                turnoB: dayB.grueros,
-              }}
-              // simulación rápida (1 corrida)
-              backendResponse={baseResult}
-            />
-          </div>
-        )}
+  {showSim2D && (
+    <div style={{ marginTop: 12 }}>
+      <Simulation2D
+        running
+        resources={{ 
+          noche: night.grueros,
+          turnoA: dayA.grueros,
+          turnoB: dayB.grueros,
+        }}
+        // simulación rápida (1 corrida)
+        backendResponse={baseResult}
+      />
+    </div>
+  )}
+  <div id="dashboard-container">
+    {/* resto del contenido */}
+        <div id="dashboard-container">
 
         {/* Carrusel de escenario Monte Carlo */}
         {isMonteCarlo && scenariosInfo && (
@@ -508,6 +611,8 @@ function handleRunSimulation() {
               />
           </div>
         )}
+        </div>
+        </div>
       </section>
   </>
 )}

@@ -7,6 +7,7 @@ import grueroImg from "../assets/resources/Gruero.png";
 import consolidadorImg from "../assets/resources/Consolidador_de_carga .png";
 import chequeadorImg from "../assets/resources/Chequeador.png";
 import camionImg from "../assets/resources/Camion.png";
+import camiont1Img from "../assets/resources/camion_retorno.png";
 import personal_subestandar from "../assets/subestandar/Operario_subestandar.png";
 import liquido_subestandar from "../assets/subestandar/Liquido.png";
 import prv_danado from "../assets/subestandar/PRV_danado.png";
@@ -21,6 +22,7 @@ import entrada_estandarizacion from "../assets/clasificacion/Entrada_Estandariza
 import personal_reempaque from "../assets/reempaque/Operario_Reempaque.png";
 import entrada_reempaque from "../assets/reempaque/Entrada_Reempaque.png";
 import entrada_sin_recurso from "../assets/reempaque/Entrada_sin_recurso.png";
+import { ParamCheckbox } from "./ParamCheckbox";
 
 interface StaffCardsProps {
   shiftInput: ShiftId;
@@ -176,9 +178,48 @@ export function StaffCards({
       </div>
     );
   }
+    else if (shiftInput === "diaA" ) {
+      return (
+    <div className={`day-cards-container subestandar  ${editing ? "hide-on-expand" : ""}`}>
+      <ParamCheckbox
+        label="Retorno Pallets"
+        value={currentParams.retorno_pallets}
+        onChange={(v) => onUpdate("retorno_pallets", v)}
+        imgSrc={camiont1Img}
+      />
+      <ParamCard
+        label="Pickers"
+        value={currentParams.pickers}
+        onChange={(v) => onUpdate("pickers", v)}
+        imgSrc={pickerImg}
+      />
 
+      <ParamCard
+        label="Gruero"
+        value={currentParams.grueros}
+        onChange={(v) => onUpdate("grueros", v)}
+        imgSrc={grueroImg}
+      />
+
+      <ParamCard
+        label="Chequeador"
+        value={currentParams.chequeadores}
+        onChange={(v) => onUpdate("chequeadores", v)}
+        imgSrc={chequeadorImg}
+      />
+
+      <ParamCard
+        label="Consolidador de carga"
+        value={currentParams.consolidadores}
+        onChange={(v) => onUpdate("consolidadores", v)}
+        imgSrc={consolidadorImg}
+      />
+    </div>
+    );
+  }
   return (
     <div className={`day-cards-container ${editing ? "hide-on-expand" : ""}`}>
+     
       <ParamCard
         label="Pickers"
         value={currentParams.pickers}

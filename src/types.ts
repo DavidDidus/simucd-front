@@ -18,6 +18,7 @@ export type Params = {
   personal_reempaque: number;
   entrada_reempaque: number;
   entrada_sin_recurso: number;
+  retorno_pallets: boolean;
 
 };
 
