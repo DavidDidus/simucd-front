@@ -527,7 +527,6 @@ const actorCounts = useMemo<Record<ActorType, number>>(
   if (!Array.isArray(linea)) return [];
 
   const events: CraneMovementEvent[] = [];
-  console.log("linea", linea);
 
     linea
     .filter(
@@ -617,7 +616,6 @@ const distributionTruckEntryEvents = useMemo<DistributionTruckEntryEvent[]>(() =
   const root: any = (backendResponse as any)?.data ?? backendResponse;
   const linea: EventoRecurso[] | undefined = root?.linea_tiempo_recursos;
 
-  console.log('[DistributionTruck] linea_tiempo_recursos (raw):', linea);
 
   if (!Array.isArray(linea)) return [];
 
@@ -644,7 +642,6 @@ const distributionTruckEntryEvents = useMemo<DistributionTruckEntryEvent[]>(() =
 
   events.sort((a, b) => a.startAtSec - b.startAtSec);
 
-  console.log('[DistributionTruck] eventos de entrada parseados:', events);
   return events;
 }, [backendResponse]);
 
@@ -683,7 +680,6 @@ const distributionTruckExitEvents = useMemo<DistributionTruckExitEvent[]>(() => 
 
   events.sort((a, b) => a.startAtSec - b.startAtSec);
 
-  console.log('[DistributionTruck] eventos de salida parseados:', events);
   return events;
 }, [backendResponse]);
 
@@ -731,11 +727,6 @@ useEffect(() => {
     // todavía no llega la hora del evento
     if (simTimeSec < ev.startAtSec) return;
 
-    console.log(
-      `[DistributionTruck] 🔔 Evento de entrada alcanzado a las ${formatHM(
-        simTimeSec
-      )}, programado para ${formatHM(ev.startAtSec)}`
-    );
 
     // buscamos el actor truckDistribucion (aunque esté isExited = true)
     const actor = actorStates.find(a => a.type === 'truckDistribucion');
@@ -748,16 +739,6 @@ useEffect(() => {
       return;
     }
 
-    console.log(
-      '[DistributionTruck] Encontrado actor truckDistribucion:',
-      actor.id,
-      'isExited =',
-      actor.isExited,
-      'parkingSlotId =',
-      actor.parkingSlotId,
-      'parkingPosition =',
-      actor.parkingPosition
-    );
 
     // 1) Hacer visible el camión
     setActorStates(prev =>
@@ -782,9 +763,6 @@ useEffect(() => {
       addTask(task);
       processedDistributionEntryKeysRef.current.add(ev.key);
 
-      console.log(
-        `[DistributionTruck] ✅ Tarea de entrada creada para ${actor.id} → slot-distribution-2`
-      );
     } catch (error) {
       console.error(
         '[DistributionTruck] ❌ Error creando tarea de entrada para camión de distribución',
@@ -859,11 +837,6 @@ useEffect(() => {
       addTask(task);
       processedDistributionExitKeysRef.current.add(ev.key);
 
-      console.log(
-        `[DistributionTruck Exit] ✅ Tarea de salida creada para ${actor.id} ` +
-          `desde ${fromSlotId ?? 'desconocido'} hacia slot-distribution-1 ` +
-          `a las ${formatHM(ev.startAtSec)}`
-      );
     } catch (error) {
       console.error(
         '[DistributionTruck Exit] ❌ Error creando tarea de salida para camión de distribución',
@@ -1100,9 +1073,6 @@ useEffect(() => {
 
       processedT1FinalCheckKeysRef.current.add(ev.key);
 
-      console.log(
-        `[T1 Final Check] ✅ Cadena creada para ${actor.id}: ${fromSlotId} -> check2 (${ev.durationSec}s) -> salida`
-      );
     } catch (err) {
       console.error('[T1 Final Check] ❌ Error creando cadena', err);
       processedT1FinalCheckKeysRef.current.add(ev.key);
@@ -1191,9 +1161,6 @@ useEffect(() => {
       addTask(task);
       processedT2ReturnKeysRef.current.add(ev.key);
 
-      console.log(
-        `[T2 Return solo v1] ✅ ${actor.id} retorno a parking a las ${formatHM(startSec)}`
-      );
     } catch (err) {
       console.error('[T2 Return solo v1] ❌ Error creando retorno', err);
       processedT2ReturnKeysRef.current.add(ev.key);
@@ -1301,7 +1268,6 @@ const fromSlotId =
     }
 
     try {
-      const startSec = Math.max(simTimeSec, ev.startAtSec);
 
       // Si venía oculto por alguna razón, lo mostramos antes de sacarlo
       if (actor.isExited) {
@@ -1322,9 +1288,6 @@ const fromSlotId =
       addTask(task);
       processedT2ExitKeysRef.current.add(ev.key);
 
-      console.log(
-        `[T2 Exit] ✅ ${actor.id} sale desde ${fromSlotId} a las ${formatHM(startSec)}`
-      );
     } catch (err) {
       console.error('[T2 Exit] ❌ Error creando salida', ev, err);
       processedT2ExitKeysRef.current.add(ev.key);
@@ -1412,102 +1375,13 @@ useEffect(() => {
       addTask(task);
       processedT2EntryV2KeysRef.current.add(ev.key);
 
-      console.log(
-        `[T2 v2+] ✅ ${actor.id} entra a ${freeSlotId} @ ${formatHM(simTimeSec)} (esperó ${Math.round(waitedSec/60)}m)`
-      );
     } catch (err) {
       console.error('[T2 v2+] ❌ Error creando task', err);
       processedT2EntryV2KeysRef.current.add(ev.key);
     }
   });
 }, [t2EntryV2Events, simTimeSec, actorStates, addTask, formatHM, setActorStates]);
-/*
-const t1TruckExitEvents = useMemo<T1TruckExitEvent[]>(() => {
-  const root: any = (backendResponse as any)?.data ?? backendResponse;
-  const linea: EventoRecurso[] | undefined = root?.linea_tiempo_recursos;
-  if (!Array.isArray(linea)) return [];
 
-  const events: T1TruckExitEvent[] = [];
-
-  linea.forEach((e: any, idx: number) => {
-    if (e?.recurso !== 'camion_t1') return;
-    if (typeof e?.hora_comienzo !== 'string') return;
-
-    const label = String(e.label ?? '').toLowerCase();
-    const op = String(e.operacion ?? '').toLowerCase();
-
-    const isExit =
-      label.includes('salida') || op.includes('salida') || op === 't1_h0_h3';
-
-    if (!isExit) return;
-
-    const camionId = String(e.id_recurso ?? `T1-${idx}`);
-    const startAtSec = parseHM(e.hora_comienzo);
-    const key = `t1-exit-${camionId}-${e.hora_comienzo}-${idx}`;
-
-    events.push({ key, camionId, startAtSec });
-  });
-
-  events.sort((a, b) => a.startAtSec - b.startAtSec);
-  return events;
-}, [backendResponse]);  
-
-const processedT1ExitKeysRef = useRef<Set<string>>(new Set());
-
-useEffect(() => {
-  if (!t1TruckExitEvents.length) return;
-  if (!actorStates.length) return;
-
-  t1TruckExitEvents.forEach(ev => {
-    if (processedT1ExitKeysRef.current.has(ev.key)) return;
-    if (simTimeSec < ev.startAtSec) return;
-
-    const actor =
-      actorStates.find(a => a.type === 'truckT1' && a.id === ev.camionId) ??
-      actorStates.find(a => a.type === 'truckT1');
-
-    if (!actor) {
-      processedT1ExitKeysRef.current.add(ev.key);
-      return;
-    }
-
-    // Ya salió
-    if (actor.isExited) {
-      processedT1ExitKeysRef.current.add(ev.key);
-      return;
-    }
-
-    const fromSlotId = (actor as any).parkingSlotId as string | undefined;
-
-    // 👇 Regla: SOLO sale desde chequeo final
-    if (fromSlotId !== 'slot-check-t1-2') {
-      // No lo procesamos aún → reintentar en el próximo tick
-      return;
-    }
-
-    try {
-      const startSec = Math.max(simTimeSec, ev.startAtSec);
-
-      const task = createT1ExitTaskForTruck(actor.id, actor.type, {
-        startAtSimTime: formatHM(startSec),
-        fromSlotId: 'slot-check-t1-2',
-        targetSlotId: 'slot-exit-t1-1',
-      });
-
-      addTask(task);
-      processedT1ExitKeysRef.current.add(ev.key);
-
-      console.log(
-        `[T1 Exit] ✅ ${actor.id} slot-check-t1-2 -> slot-exit-t1-1 a las ${formatHM(startSec)}`
-      );
-    } catch (err) {
-      console.error('[T1 Exit] ❌ Error creando tarea de salida', err);
-      processedT1ExitKeysRef.current.add(ev.key);
-    }
-  });
-}, [t1TruckExitEvents, simTimeSec, actorStates, addTask, formatHM]);
-
-*/
 type TruckMoveEvent = {
   key: string;
   camionId: string;
@@ -1549,7 +1423,6 @@ const truckMoveEvents = useMemo<TruckMoveEvent[]>(() => {
     });
 
   events.sort((a, b) => a.startAtSec - b.startAtSec);
-  console.log('[TruckMoveEvents]', events);
   return events;
 }, [backendResponse, parseHM]);
 
@@ -1589,7 +1462,6 @@ const truckExitEvents = useMemo<TruckExitEvent[]>(() => {
     });
 
   events.sort((a, b) => a.startAtSec - b.startAtSec);
-  console.log('[TruckExitEvents]', events);
   return events;
 }, [backendResponse, parseHM]);
 
@@ -1617,7 +1489,6 @@ const palletResourceMap = useMemo(() => {
 
     const selectedRoute = PREDEFINED_ROUTES.find(r => r.id === routeId);
     if (selectedRoute) {
-      console.log(`🎯 Ruta seleccionada manualmente: "${selectedRoute.name}"`);
       setActiveRouteId(routeId);
 
       const safePoints = applyAvoidObstaclesToRoute(selectedRoute.points);
@@ -1660,18 +1531,12 @@ const palletResourceMap = useMemo(() => {
     const backendIdSet = new Set(truckIdsFromBackend);
     if (backendIdSet.size === 0) return;
 
-    console.log('[Startup Tasks] truckIdsFromBackend:', truckIdsFromBackend);
 
     const trucksInParking = actorStates.filter(
       a =>
         a.type === 'truck1' &&
         a.parkingSlotId &&
         backendIdSet.has(a.id)
-    );
-
-    console.log(
-      '[Startup Tasks] actorStates truck1 IDs:',
-      trucksInParking.map(a => a.id)
     );
 
     // 👉 Solo los primeros 16 (según cola de tiempo)
@@ -1686,10 +1551,6 @@ const palletResourceMap = useMemo(() => {
       immediateTruckIds.includes(a.id)
     ).slice(0, 16);
 
-    console.log(
-      `[Startup Tasks] Camiones que entran inmediatamente:`,
-      immediateTrucks.map(a => a.id)
-    );
 
     if (immediateTrucks.length === 0) return;
 
@@ -1767,11 +1628,6 @@ const palletResourceMap = useMemo(() => {
       addTask(task);
       processedTruckExitKeysRef.current.add(ev.key);
 
-      console.log(
-        `[TruckExit] ✅ Creada tarea de salida para camión ${ev.camionId} desde ${parkingSlotId} a las ${formatHM(
-          simTimeSec
-        )}`
-      );
     } catch (error) {
       console.error(
         '[TruckExit] Error creando tarea de salida para camión',
@@ -1884,9 +1740,6 @@ useEffect(() => {
   if (!actorStates.length) return;
 
   // Para debug
-  // console.log('[TruckQueue] slotLiberadoEvents', slotLiberadoEvents);
-  // console.log('[TruckQueue] queuedTrucksAfter16', queuedTrucksAfter16);
-
   slotLiberadoEvents.forEach(ev => {
     // Ya gestioné este evento
     if (processedSlotLiberadoKeysRef.current.has(ev.key)) {
@@ -1950,11 +1803,6 @@ useEffect(() => {
       queuedTruckIdsRef.current.add(candidate.camionId);
       processedSlotLiberadoKeysRef.current.add(ev.key);
 
-      console.log(
-        `[TruckQueue] 🟢 Asignado camión ${candidate.camionId} a slot liberado (${formatHM(
-          ev.startAtSec
-        )}), startAtSimTime=${formatHM(startSec)}`
-      );
     } catch (error) {
       console.error(
         '[TruckQueue] Error creando tarea para camión',
@@ -2383,11 +2231,6 @@ useEffect(() => {
       addTask(task);
       firedTruckMoveEventsRef.current.add(ev.key);
 
-      console.log(
-        `[TruckMove] ✅ Creada tarea para camión ${ev.camionId} desde slot ${currentSlotId} a las ${formatHM(
-          simTimeSec
-        )}`
-      );
     } catch (error) {
       console.error(
         '[TruckMove] Error creando tarea de movimiento para camión',

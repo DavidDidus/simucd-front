@@ -19,9 +19,6 @@ export function saveObstacle(obstacle: Omit<PredefinedObstacle, 'id'>): Predefin
     ...obstacle
   };
   
-  console.log('Nuevo obstáculo creado:', newObstacle);
-  console.log('JSON para agregar a obstacles.json:', JSON.stringify(newObstacle, null, 2));
-  
   return newObstacle;
 }
 

@@ -89,8 +89,6 @@ export default function SaveObstacleModal({ points, onClose }: Props) {
       );
     } else {
       // Fallback: mostrar en consola si la copia falló
-      console.log('Obstáculo para guardar:', obstacleData);
-      console.log('JSON para obstacles.json:', jsonForClipboard);
       
       alert(
         `⚠️ Obstáculo "${name}" creado, pero no se pudo copiar automáticamente.\n\n` +

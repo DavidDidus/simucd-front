@@ -166,8 +166,6 @@ export function useSimulation() {
 
       const payload = buildPayload(params, night, dayA, dayB, simulationId);
 
-      console.log("Running Monte Carlo with payload:", payload);
-
       const response = await axios.post(
         `${API_BASE_URL}/simulate-montecarlo`,
         payload
@@ -234,7 +232,6 @@ export function useSimulation() {
           "pallets_est_manual": clasificacion.entrada_estandarizacion,
           "cajas_vendidas": params.cajasFacturadas,
         };
-        console.log("Running Clasificacion with payload:", clasificacionPayload);
 
         const response = await axios.post(
           `${API_BASE_URL}/clasificacion/simulate`,
@@ -244,12 +241,10 @@ export function useSimulation() {
 
         setShowDashboardClasificacion(true);
         setClasificacionResult(data);
-        console.log("Clasificacion simulation result:", data);
       }else{
         setShowDashboardClasificacion(false);
       }
 
-      console.log("Base simulation result:", data);
 
       // Disparar Monte Carlo en segundo plano
       void runMonteCarlo(params, night, dayA, dayB, simulationId);
@@ -288,7 +283,6 @@ export function useSimulation() {
         "unidades_pet": params.saca_pet,
         "unidades_prv": params.prv_danado,
       };
-      console.log("Running Subestandar with payload:", payload);  
       const response = await axios.post(
         `${API_BASE_URL}/subestandar/run`,
         payload
@@ -299,7 +293,6 @@ export function useSimulation() {
       setSubestandarResult(data);
       setShowDashboardSubestandar(true);
       setShowDashboard(false);
-      console.log("Subestandar simulation result:", data);
     }
     catch (err) {
       if (axios.isAxiosError(err)) {
@@ -334,7 +327,6 @@ export function useSimulation() {
         "stock_inicial": reempaque.entrada_sin_recurso,
         "hay_maquilador": true
       };
-      console.log("Running Reempaque with payload:", payload);  
       const response = await axios.post(
         `${API_BASE_URL}/reempaque/simulate`,
         payload
@@ -343,7 +335,6 @@ export function useSimulation() {
 
       setReempaqueResult(data);
       setShowDashboardReempaque(true);
-      console.log("Reempaque simulation result:", data);
     }
     catch (err) {
       if (axios.isAxiosError(err)) {

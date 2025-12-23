@@ -99,27 +99,15 @@ export function findNearestFreeSlotInZone(
     // Si no hay huecos en zone-main, pasamos a zone-secondary
     if (freeSlots.length === 0) {
       freeSlots = collectFreeSlots(secondaryZones);
-      console.log(
-        `[Parking] findNearestFreeSlotInZone(zone-parking) -> zone-main llena, usando zone-secondary`
-      );
-    } else {
-      console.log(
-        `[Parking] findNearestFreeSlotInZone(zone-parking) -> usando solo zone-main`
-      );
-    }
+    } 
+
   } else {
     // 🔎 Comportamiento normal para otras zonas
     const zonesToSearch = zones.filter(z => z.id === zoneId);
     freeSlots = collectFreeSlots(zonesToSearch);
-    console.log(
-      `[Parking] findNearestFreeSlotInZone(${zoneId}) -> libres=${freeSlots
-        .map(s => s.id)
-        .join(',')}`
-    );
   }
 
   if (freeSlots.length === 0) {
-    console.log(`[Parking] findNearestFreeSlotInZone(${zoneId}) -> sin slots libres`);
     return null;
   }
 
@@ -137,9 +125,6 @@ export function findNearestFreeSlotInZone(
     }
   }
 
-  console.log(
-    `[Parking] mejor slot elegido=${bestSlot.id} (zoneId=${zoneId})`
-  );
   return bestSlot;
 }
 
@@ -151,7 +136,6 @@ export function occupySlot(slotId: string): void {
   const slot = getSlotById(slotId);
   if (slot) {
     slot.occupied = true;
-    console.log('[Parking] occupySlot', slotId);
   } else {
     console.warn('[Parking] occupySlot: slot no encontrado', slotId);
   }
@@ -164,7 +148,6 @@ export function releaseSlot(slotId: string): void {
   const slot = getSlotById(slotId);
   if (slot) {
     slot.occupied = false;
-    console.log('[Parking] releaseSlot', slotId);
   } else {
     console.warn('[Parking] releaseSlot: slot no encontrado', slotId);
   }
@@ -221,7 +204,6 @@ export function assignParkingSlots(
         availableSlot.assignedTo = actorId;
 
         assigned = true;
-        console.log(`✅ ${actorId} asignado a ${availableSlot.id} en ${zone.name}`);
         break;
       }
 

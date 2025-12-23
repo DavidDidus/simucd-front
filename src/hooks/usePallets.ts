@@ -305,7 +305,6 @@ const distribucionUnloadEvents = useMemo<DistribucionUnloadEvent[]>(() => {
   });
 
   events.sort((a, b) => a.startAtSec - b.startAtSec);
-  // console.log('[DistribucionUnloadEvents]', events);
   return events;
 }, [lineaTiempoRecursos]);
 

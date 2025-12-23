@@ -61,7 +61,6 @@ function safeNumber(n?: number) {
 
 export default function ReempaqueDashboard({ result }: { result: ReempaqueResult }) {
   const r = result;
-  console.log("Rendering ReempaqueDashboard with result:", r);
 
   if (!r) {
     return (
