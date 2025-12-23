@@ -8,7 +8,7 @@ export function InfoModal({ isOpen, onClose }: InfoModalProps) {
 
   const handleDownload = () => {
     const link = document.createElement('a');
-    link.href = '/manual.pdf'; // Ruta relativa a public/
+    link.href = '/SIMUCD-Manual-Usuario.pdf'; // Ruta relativa a public/
     link.download = 'SIMUCD-Manual-Usuario.pdf';
     link.click();
   };
